@@ -1,4 +1,4 @@
-import type { ApiTask, BoardTask } from '../../types';
+import type { ApiTask, BoardTask, User } from '../../types';
 
 const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:4000';
 
@@ -174,4 +174,13 @@ export async function moveTask(id: string, boardColumn: string, boardOrder: numb
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Failed to move task');
   return data;
+}
+
+export async function getProfile(): Promise<User> {
+  const res = await fetch(`${API_BASE}/api/users/me`, { headers: headers() });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to fetch profile');
+  }
+  return res.json();
 }

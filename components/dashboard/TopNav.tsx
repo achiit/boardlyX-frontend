@@ -5,11 +5,37 @@ import { useStore } from '../../store/useStore';
 import { SEPOLIA_CHAIN_ID } from '../../src/config/contract';
 import { useChainId } from 'wagmi';
 import { NotificationPopup } from './NotificationPopup';
+import { MessageCircle, CheckCircle2 } from 'lucide-react';
+import * as api from '../../src/services/api';
 
 export const TopNav: React.FC = () => {
-  const { auth, wallet, setMobileMenuOpen } = useStore();
+  const { auth, wallet, setMobileMenuOpen, updateUser } = useStore();
   const chainId = useChainId();
   const isSepolia = chainId === SEPOLIA_CHAIN_ID;
+
+  const handleConnectTelegram = () => {
+    if (!auth.user?.username) return;
+    const botUrl = `https://t.me/updatesBoadlyXbot?start=${auth.user.username}`;
+    window.open(botUrl, '_blank');
+  };
+
+  const refreshProfile = React.useCallback(async () => {
+    if (!auth.isAuthenticated) return;
+    try {
+      const user = await api.getProfile();
+      updateUser(user);
+    } catch (err) {
+      console.error('Failed to refresh profile', err);
+    }
+  }, [auth.isAuthenticated, updateUser]);
+
+  React.useEffect(() => {
+    const handleFocus = () => {
+      refreshProfile();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [refreshProfile]);
 
   return (
     <header className="h-16 md:h-20 border-b border-white/5 flex items-center justify-between px-4 md:px-8 sticky top-0 z-40 bg-[#0F1117]/80 backdrop-blur-md gap-3">
@@ -30,6 +56,23 @@ export const TopNav: React.FC = () => {
 
       <div className="flex items-center gap-3 md:gap-6 flex-shrink-0">
         <div className="flex items-center gap-2">
+          {auth.user?.id && (
+            auth.user.telegram_username ? (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 transition-all text-sm font-medium">
+                <CheckCircle2 size={16} className="text-emerald-500" />
+                <span className="hidden sm:inline">Connected to Telegram as @{auth.user.telegram_username}</span>
+              </div>
+            ) : (
+              <button
+                onClick={handleConnectTelegram}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#2AABEE]/10 text-[#2AABEE] hover:bg-[#2AABEE]/20 border border-[#2AABEE]/30 transition-all text-sm font-medium"
+              >
+                <MessageCircle size={16} />
+                <span className="hidden sm:inline">Connect Telegram</span>
+              </button>
+            )
+          )}
+
           {wallet.isConnected && (
             <span className={`px-2 py-1 rounded-lg text-xs font-medium hidden sm:inline-flex ${isSepolia ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}`}>
               {isSepolia ? 'Sepolia' : `Chain ${chainId}`}
