@@ -4,6 +4,7 @@ export interface User {
   email: string;
   username: string;
   avatar: string;
+  telegram_username?: string | null;
 }
 
 /** API task shape from backend */

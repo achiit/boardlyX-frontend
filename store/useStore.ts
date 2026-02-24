@@ -57,6 +57,7 @@ interface AppState {
   setNotifications: (n: AppNotification[], unread: number) => void;
   setUnreadNotifCount: (c: number) => void;
   markNotifRead: (id: string) => void;
+  updateUser: (user: User) => void;
 }
 
 const mockTasks: Task[] = [
@@ -150,6 +151,12 @@ export const useStore = create<AppState>((set, get) => ({
       notifications: state.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
       unreadNotifCount: Math.max(0, state.unreadNotifCount - 1),
     })),
+  updateUser: (user) => {
+    localStorage.setItem('user', JSON.stringify(user));
+    set((state) => ({
+      auth: { ...state.auth, user },
+    }));
+  },
 }));
 
 export function getOnChainStatus(task: ApiTask, pendingTaskId: string | null): OnChainStatus {

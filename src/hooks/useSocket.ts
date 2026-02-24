@@ -4,39 +4,56 @@ import type { Message, Conversation } from '../services/chatApi';
 
 const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:4000';
 
+// Global socket instance to prevent multiple connections and stale refs across components
+let globalSocket: Socket | null = null;
+let connectionCount = 0;
+
 export function useSocket() {
-    const socketRef = useRef<Socket | null>(null);
-    const [isConnected, setIsConnected] = useState(false);
+    const [isConnected, setIsConnected] = useState(globalSocket?.connected || false);
 
     useEffect(() => {
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        const socket = io(API_BASE, {
-            auth: { token },
-            transports: ['websocket', 'polling'],
-            reconnection: true,
-            reconnectionDelay: 1000,
-            reconnectionAttempts: 10,
-        });
+        connectionCount++;
 
-        socket.on('connect', () => setIsConnected(true));
-        socket.on('disconnect', () => setIsConnected(false));
+        if (!globalSocket) {
+            globalSocket = io(API_BASE, {
+                auth: { token },
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionAttempts: 10,
+            });
+        }
 
-        socketRef.current = socket;
+        const handleConnect = () => setIsConnected(true);
+        const handleDisconnect = () => setIsConnected(false);
+
+        globalSocket.on('connect', handleConnect);
+        globalSocket.on('disconnect', handleDisconnect);
+
+        if (globalSocket.connected) {
+            setIsConnected(true);
+        }
 
         return () => {
-            socket.disconnect();
-            socketRef.current = null;
-            setIsConnected(false);
+            connectionCount--;
+            if (globalSocket) {
+                globalSocket.off('connect', handleConnect);
+                globalSocket.off('disconnect', handleDisconnect);
+            }
+            if (connectionCount === 0 && globalSocket) {
+                globalSocket.disconnect();
+                globalSocket = null;
+            }
         };
     }, []);
 
     const sendMessage = useCallback((conversationId: string, content: string): Promise<Message | null> => {
         return new Promise((resolve) => {
-            const socket = socketRef.current;
-            if (!socket) return resolve(null);
-            socket.emit('send_message', { conversationId, content }, (response: any) => {
+            if (!globalSocket) return resolve(null);
+            globalSocket.emit('send_message', { conversationId, content }, (response: any) => {
                 if (response?.success) {
                     resolve(response.message);
                 } else {
@@ -47,43 +64,39 @@ export function useSocket() {
     }, []);
 
     const onNewMessage = useCallback((callback: (message: Message) => void) => {
-        const socket = socketRef.current;
-        if (!socket) return () => { };
-        socket.on('new_message', callback);
-        return () => { socket.off('new_message', callback); };
+        if (!globalSocket) return () => { };
+        globalSocket.on('new_message', callback);
+        return () => { globalSocket?.off('new_message', callback); };
     }, []);
 
     const onNewConversation = useCallback((callback: (conversation: Conversation) => void) => {
-        const socket = socketRef.current;
-        if (!socket) return () => { };
-        socket.on('new_conversation', callback);
-        return () => { socket.off('new_conversation', callback); };
+        if (!globalSocket) return () => { };
+        globalSocket.on('new_conversation', callback);
+        return () => { globalSocket?.off('new_conversation', callback); };
     }, []);
 
     const joinConversation = useCallback((conversationId: string) => {
-        socketRef.current?.emit('join_conversation', { conversationId });
+        globalSocket?.emit('join_conversation', { conversationId });
     }, []);
 
     const emitTypingStart = useCallback((conversationId: string) => {
-        socketRef.current?.emit('typing_start', { conversationId });
+        globalSocket?.emit('typing_start', { conversationId });
     }, []);
 
     const emitTypingStop = useCallback((conversationId: string) => {
-        socketRef.current?.emit('typing_stop', { conversationId });
+        globalSocket?.emit('typing_stop', { conversationId });
     }, []);
 
     const onTyping = useCallback((callback: (data: { conversationId: string; userId: string }) => void) => {
-        const socket = socketRef.current;
-        if (!socket) return () => { };
-        socket.on('user_typing', callback);
-        return () => { socket.off('user_typing', callback); };
+        if (!globalSocket) return () => { };
+        globalSocket.on('user_typing', callback);
+        return () => { globalSocket?.off('user_typing', callback); };
     }, []);
 
     const onStopTyping = useCallback((callback: (data: { conversationId: string; userId: string }) => void) => {
-        const socket = socketRef.current;
-        if (!socket) return () => { };
-        socket.on('user_stop_typing', callback);
-        return () => { socket.off('user_stop_typing', callback); };
+        if (!globalSocket) return () => { };
+        globalSocket.on('user_stop_typing', callback);
+        return () => { globalSocket?.off('user_stop_typing', callback); };
     }, []);
 
     return {

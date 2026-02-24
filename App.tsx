@@ -97,6 +97,7 @@ const AuthPage: React.FC = () => {
           email: user.email,
           username: user.username || '',
           avatar: user.email?.[0]?.toUpperCase() || 'A',
+          telegram_username: user.telegram_username,
         },
         token,
       );
