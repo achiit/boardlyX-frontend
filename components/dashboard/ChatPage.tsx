@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageCircle, Send, Search, Users, ArrowLeft, Hash, Loader2, Plus, X, Paperclip, Image as ImageIcon, Film, XCircle } from 'lucide-react';
+import { MessageCircle, Send, Search, Users, ArrowLeft, Hash, Loader2, Plus, X, Paperclip, Image as ImageIcon, Film, XCircle, Pin, PinOff, Reply } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { useSocket } from '../../src/hooks/useSocket';
 import * as chatApi from '../../src/services/chatApi';
@@ -56,6 +56,20 @@ function getDmUsername(conv: Conversation, currentUserId: string): string | null
     return other?.username || null;
 }
 
+function renderMessageContent(content: string) {
+    if (!content) return null;
+    // Regex matches @username, ensuring it's preceded by space/start and followed by space/end/punctuation
+    const mentionRegex = /(?<=^|\s)(@\w+)(?=\s|$|[.,!?])/g;
+
+    const parts = content.split(mentionRegex);
+    return parts.map((part, i) => {
+        if (part.match(/^@\w+$/)) {
+            return <span key={i} className="text-[#2AABEE] font-medium bg-[#2AABEE]/10 px-1 py-0.5 rounded-md">{part}</span>;
+        }
+        return part;
+    });
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export const ChatPage: React.FC = () => {
@@ -77,11 +91,27 @@ export const ChatPage: React.FC = () => {
     const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
     const [showMobileChat, setShowMobileChat] = useState(false);
 
+    // Pinned conversations (local storage)
+    const [pinnedConvs, setPinnedConvs] = useState<string[]>(() => {
+        try {
+            const saved = localStorage.getItem(`boardlyX_pinned_${currentUserId}`);
+            return saved ? JSON.parse(saved) : [];
+        } catch {
+            return [];
+        }
+    });
+
     // Media states
     const [mediaPreview, setMediaPreview] = useState<{ type: string; data: string; name: string } | null>(null);
     const [uploading, setUploading] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [showAttachMenu, setShowAttachMenu] = useState(false);
+
+    // Reply state
+    const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+
+    // Mentions state
+    const [mentionQuery, setMentionQuery] = useState<{ active: boolean; text: string; index: number } | null>(null);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -94,6 +124,11 @@ export const ChatPage: React.FC = () => {
     useEffect(() => {
         loadConversations();
     }, []);
+
+    // Save pinned convs
+    useEffect(() => {
+        localStorage.setItem(`boardlyX_pinned_${currentUserId}`, JSON.stringify(pinnedConvs));
+    }, [pinnedConvs, currentUserId]);
 
     const loadConversations = async () => {
         try {
@@ -216,11 +251,14 @@ export const ChatPage: React.FC = () => {
         }
 
         const content = messageInput.trim();
+        const replyToId = replyingTo?.id;
+
         setMessageInput('');
+        setReplyingTo(null);
         setSending(true);
 
         try {
-            await sendMessage(activeConvId, content);
+            await sendMessage(activeConvId, content, replyToId);
             emitTypingStop(activeConvId);
         } catch (err) {
             console.error('Failed to send message', err);
@@ -238,6 +276,7 @@ export const ChatPage: React.FC = () => {
 
         setUploading(true);
         setUploadError(null);
+        const replyToId = replyingTo?.id;
 
         try {
             await chatApi.sendMediaMessage(
@@ -245,9 +284,11 @@ export const ChatPage: React.FC = () => {
                 mediaPreview.type,
                 mediaPreview.data,
                 messageInput.trim() || undefined,
+                replyToId
             );
             setMediaPreview(null);
             setMessageInput('');
+            setReplyingTo(null);
         } catch (err: any) {
             setUploadError(err.message || 'Failed to send media');
         } finally {
@@ -300,6 +341,23 @@ export const ChatPage: React.FC = () => {
     // ── Handle typing ──
     const handleInputChange = (val: string) => {
         setMessageInput(val);
+
+        // Handle mentioning logic
+        const cursorPosition = textareaRef.current?.selectionStart || 0;
+        const textBeforeCursor = val.slice(0, cursorPosition);
+        const words = textBeforeCursor.split(/[\s\n]/);
+        const currentWord = words[words.length - 1];
+
+        if (currentWord.startsWith('@')) {
+            setMentionQuery({
+                active: true,
+                text: currentWord.slice(1).toLowerCase(),
+                index: cursorPosition - currentWord.length
+            });
+        } else {
+            setMentionQuery(null);
+        }
+
         if (activeConvId && val.trim()) {
             emitTypingStart(activeConvId);
             if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
@@ -309,6 +367,16 @@ export const ChatPage: React.FC = () => {
         } else if (activeConvId) {
             emitTypingStop(activeConvId);
         }
+    };
+
+    const handleMentionSelect = (username: string) => {
+        if (!mentionQuery) return;
+        const beforeMention = messageInput.slice(0, mentionQuery.index);
+        const afterMention = messageInput.slice(textareaRef.current?.selectionStart || 0);
+        const newText = `${beforeMention}@${username} ${afterMention}`;
+        setMessageInput(newText);
+        setMentionQuery(null);
+        textareaRef.current?.focus();
     };
 
     // ── Create DM ──
@@ -333,6 +401,14 @@ export const ChatPage: React.FC = () => {
         setActiveConvId(convId);
         setShowMobileChat(true);
         setTypingUsers(new Set());
+        setReplyingTo(null);
+    };
+
+    const togglePin = (convId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setPinnedConvs(prev =>
+            prev.includes(convId) ? prev.filter(id => id !== convId) : [...prev, convId]
+        );
     };
 
     // ── Filter conversations ──
@@ -344,6 +420,21 @@ export const ChatPage: React.FC = () => {
 
     const groupConversations = filteredConversations.filter((c) => c.type === 'group');
     const dmConversations = filteredConversations.filter((c) => c.type === 'dm');
+
+    // Sort by pinned
+    const sortConvs = (a: Conversation, b: Conversation) => {
+        const aPinned = pinnedConvs.includes(a.id);
+        const bPinned = pinnedConvs.includes(b.id);
+        if (aPinned && !bPinned) return -1;
+        if (!aPinned && bPinned) return 1;
+        return 0; // maintain default date sorting within groups
+    };
+
+    const sortedGroups = [...groupConversations].sort(sortConvs);
+    const sortedDms = [...dmConversations].sort(sortConvs);
+
+    // Filter members for mention dropdown
+    const mentionableMembers = activeConv?.members?.filter(m => m.id !== currentUserId && (m.username?.toLowerCase().includes(mentionQuery?.text || '') || m.name?.toLowerCase().includes(mentionQuery?.text || ''))) || [];
 
     // ── Group messages by date ──
     const groupedMessages: { date: string; messages: Message[] }[] = [];
@@ -425,16 +516,16 @@ export const ChatPage: React.FC = () => {
                             {groupConversations.length > 0 && (
                                 <>
                                     <div className="px-5 py-2.5 text-[10px] font-bold text-white/25 uppercase tracking-[0.15em]">Team Chats</div>
-                                    {groupConversations.map((conv) => (
-                                        <ConversationItem key={conv.id} conv={conv} isActive={conv.id === activeConvId} currentUserId={currentUserId} onClick={() => handleSelectConversation(conv.id)} />
+                                    {sortedGroups.map((conv) => (
+                                        <ConversationItem key={conv.id} conv={conv} isActive={conv.id === activeConvId} isPinned={pinnedConvs.includes(conv.id)} currentUserId={currentUserId} onClick={() => handleSelectConversation(conv.id)} onTogglePin={(e) => togglePin(conv.id, e)} />
                                     ))}
                                 </>
                             )}
-                            {dmConversations.length > 0 && (
+                            {sortedDms.length > 0 && (
                                 <>
                                     <div className="px-5 py-2.5 mt-1 text-[10px] font-bold text-white/25 uppercase tracking-[0.15em]">Direct Messages</div>
-                                    {dmConversations.map((conv) => (
-                                        <ConversationItem key={conv.id} conv={conv} isActive={conv.id === activeConvId} currentUserId={currentUserId} onClick={() => handleSelectConversation(conv.id)} />
+                                    {sortedDms.map((conv) => (
+                                        <ConversationItem key={conv.id} conv={conv} isActive={conv.id === activeConvId} isPinned={pinnedConvs.includes(conv.id)} currentUserId={currentUserId} onClick={() => handleSelectConversation(conv.id)} onTogglePin={(e) => togglePin(conv.id, e)} />
                                     ))}
                                 </>
                             )}
@@ -461,8 +552,8 @@ export const ChatPage: React.FC = () => {
                                 <ArrowLeft size={18} />
                             </button>
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm ${activeConv.type === 'group'
-                                    ? 'bg-gradient-to-br from-indigo-500/30 to-purple-500/30 text-indigo-300 border border-indigo-500/20'
-                                    : 'bg-gradient-to-br from-emerald-500/30 to-teal-500/30 text-emerald-300 border border-emerald-500/20'
+                                ? 'bg-gradient-to-br from-indigo-500/30 to-purple-500/30 text-indigo-300 border border-indigo-500/20'
+                                : 'bg-gradient-to-br from-emerald-500/30 to-teal-500/30 text-emerald-300 border border-emerald-500/20'
                                 }`}>
                                 {activeConv.type === 'group' ? <Hash size={18} /> : getConversationAvatar(activeConv, currentUserId)}
                             </div>
@@ -516,7 +607,7 @@ export const ChatPage: React.FC = () => {
                                             const isConsecutive = idx > 0 && group.messages[idx - 1]?.sender_id === msg.sender_id;
 
                                             return (
-                                                <div key={msg.id} className={`flex gap-2.5 ${isOwn ? 'justify-end' : 'justify-start'} ${isConsecutive ? 'mt-0.5' : 'mt-3'}`}>
+                                                <div key={msg.id} className={`flex gap-2.5 ${isOwn ? 'justify-end' : 'justify-start'} ${isConsecutive && !msg.reply_to_id ? 'mt-0.5' : 'mt-3'}`}>
                                                     {!isOwn && (
                                                         <div className="w-8 flex-shrink-0">
                                                             {showAvatar && (
@@ -526,9 +617,22 @@ export const ChatPage: React.FC = () => {
                                                             )}
                                                         </div>
                                                     )}
-                                                    <div className={`max-w-[75%] md:max-w-[65%]`}>
+                                                    <div className={`max-w-[75%] md:max-w-[65%]`} onDoubleClick={() => setReplyingTo(msg)}>
                                                         {showName && !isOwn && (
                                                             <p className="text-[11px] font-medium text-indigo-400/70 mb-1 ml-1">{msg.sender?.name || msg.sender?.username || 'User'}</p>
+                                                        )}
+
+                                                        {/* Reply Preview */}
+                                                        {msg.reply_to_id && (
+                                                            <div className={`flex items-start gap-2 mb-1 px-3 py-1.5 opacity-70 ${isOwn ? 'bg-white/5 rounded-2xl rounded-br-md text-right flex-row-reverse border-r-2 border-indigo-400' : 'bg-white/5 rounded-2xl rounded-bl-md border-l-2 border-emerald-400'}`}>
+                                                                <Reply size={12} className="mt-0.5 text-white/50 flex-shrink-0" />
+                                                                <div className={`min-w-0 ${isOwn ? 'text-right' : 'text-left'}`}>
+                                                                    <p className="text-[10px] font-semibold text-white/80">{msg.reply_to?.sender?.username || 'Previous message'}</p>
+                                                                    <p className="text-[11px] text-white/50 truncate max-w-[150px] sm:max-w-[250px]">
+                                                                        {msg.reply_to?.content || (msg.reply_to?.media_type ? '📎 Media' : 'Message...')}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
                                                         )}
 
                                                         {/* Media content */}
@@ -546,7 +650,7 @@ export const ChatPage: React.FC = () => {
                                                         {msg.content && (
                                                             <div className={`px-3.5 py-2 text-[13px] leading-relaxed break-words ${isOwn ? 'bg-indigo-500 text-white rounded-2xl rounded-br-md' : 'bg-[#1A1D25] text-white/90 border border-white/5 rounded-2xl rounded-bl-md'
                                                                 }`}>
-                                                                {msg.content}
+                                                                {renderMessageContent(msg.content)}
                                                             </div>
                                                         )}
 
@@ -573,6 +677,50 @@ export const ChatPage: React.FC = () => {
 
                             <div ref={messagesEndRef} />
                         </div>
+
+                        {/* Reply Composer Preview */}
+                        {replyingTo && (
+                            <div className="px-4 md:px-6 pt-3 border-t border-white/5 bg-[#0F1117]">
+                                <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border-l-2 border-indigo-500">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-semibold text-indigo-400">Replying to {replyingTo.sender?.username || 'User'}</p>
+                                        <p className="text-[11px] text-white/50 truncate mt-0.5">
+                                            {replyingTo.content || (replyingTo.media_type ? '📎 Media' : '')}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => setReplyingTo(null)}
+                                        className="p-1.5 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Mention Dropdown */}
+                        {mentionQuery?.active && mentionableMembers.length > 0 && (
+                            <div className="px-4 md:px-6 absolute bottom-20 left-0 right-0 z-50 pointer-events-none">
+                                <div className="bg-[#1A1D25] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-w-sm pointer-events-auto max-h-48 overflow-y-auto custom-scrollbar">
+                                    <div className="px-3 py-2 text-[10px] font-bold text-white/30 uppercase tracking-wider border-b border-white/5 bg-black/20">Mentions</div>
+                                    {mentionableMembers.map(member => (
+                                        <button
+                                            key={member.id}
+                                            onClick={() => handleMentionSelect(member.username)}
+                                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 transition-colors text-left"
+                                        >
+                                            <div className="w-6 h-6 rounded-full overflow-hidden bg-black/30 flex-shrink-0">
+                                                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${member.name || member.username}`} alt="" className="w-full h-full" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-[13px] font-medium text-white truncate">{member.name}</p>
+                                                <p className="text-[11px] text-indigo-400/70 truncate">@{member.username}</p>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Media Preview Bar */}
                         {mediaPreview && (
@@ -692,11 +840,13 @@ export const ChatPage: React.FC = () => {
 interface ConversationItemProps {
     conv: Conversation;
     isActive: boolean;
+    isPinned: boolean;
     currentUserId: string;
     onClick: () => void;
+    onTogglePin: (e: React.MouseEvent) => void;
 }
 
-const ConversationItem: React.FC<ConversationItemProps> = ({ conv, isActive, currentUserId, onClick }) => {
+const ConversationItem: React.FC<ConversationItemProps> = ({ conv, isActive, isPinned, currentUserId, onClick, onTogglePin }) => {
     const name = getConversationName(conv, currentUserId);
     const avatar = getConversationAvatar(conv, currentUserId);
     const username = getDmUsername(conv, currentUserId);
@@ -704,18 +854,21 @@ const ConversationItem: React.FC<ConversationItemProps> = ({ conv, isActive, cur
     return (
         <button
             onClick={onClick}
-            className={`w-full flex items-center gap-3 px-5 py-3 text-left transition-all hover:bg-white/[0.03] ${isActive ? 'bg-indigo-500/[0.08] border-r-2 border-indigo-500' : ''
+            className={`group w-full flex items-center gap-3 px-5 py-3 text-left transition-all hover:bg-white/[0.03] ${isActive ? 'bg-indigo-500/[0.08] border-r-2 border-indigo-500' : ''
                 }`}
         >
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0 ${conv.type === 'group'
-                    ? 'bg-gradient-to-br from-indigo-500/20 to-purple-500/20 text-indigo-300'
-                    : 'bg-gradient-to-br from-emerald-500/20 to-teal-500/20 text-emerald-300'
+                ? 'bg-gradient-to-br from-indigo-500/20 to-purple-500/20 text-indigo-300'
+                : 'bg-gradient-to-br from-emerald-500/20 to-teal-500/20 text-emerald-300'
                 }`}>
                 {conv.type === 'group' ? <Hash size={16} /> : avatar}
             </div>
             <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                    <span className={`text-sm truncate ${isActive ? 'text-white font-semibold' : 'text-white/80 font-medium'}`}>{name}</span>
+                    <div className="flex items-center gap-1 min-w-0">
+                        {isPinned && <Pin size={10} className="text-indigo-400 rotate-45 flex-shrink-0" />}
+                        <span className={`text-sm truncate ${isActive ? 'text-white font-semibold' : 'text-white/80 font-medium'}`}>{name}</span>
+                    </div>
                     {conv.last_message_at && <span className="text-[10px] text-white/20 flex-shrink-0">{timeAgo(conv.last_message_at)}</span>}
                 </div>
                 <div className="flex items-center gap-1.5 mt-0.5">
@@ -727,6 +880,15 @@ const ConversationItem: React.FC<ConversationItemProps> = ({ conv, isActive, cur
                         <p className="text-xs text-white/15 italic">No messages yet</p>
                     )}
                 </div>
+            </div>
+
+            {/* Pin action button */}
+            <div
+                onClick={onTogglePin}
+                className={`p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 hover:bg-white/10 ${isPinned ? 'text-indigo-400' : 'text-white/30 hover:text-white'}`}
+                title={isPinned ? "Unpin" : "Pin"}
+            >
+                {isPinned ? <PinOff size={14} /> : <Pin size={14} className="rotate-45" />}
             </div>
         </button>
     );

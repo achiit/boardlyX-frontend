@@ -50,10 +50,10 @@ export function useSocket() {
         };
     }, []);
 
-    const sendMessage = useCallback((conversationId: string, content: string): Promise<Message | null> => {
+    const sendMessage = useCallback((conversationId: string, content: string, replyToId?: string): Promise<Message | null> => {
         return new Promise((resolve) => {
             if (!globalSocket) return resolve(null);
-            globalSocket.emit('send_message', { conversationId, content }, (response: any) => {
+            globalSocket.emit('send_message', { conversationId, content, replyToId }, (response: any) => {
                 if (response?.success) {
                     resolve(response.message);
                 } else {
