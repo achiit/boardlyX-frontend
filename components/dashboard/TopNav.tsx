@@ -1,16 +1,11 @@
 import React from 'react';
 import { Search, Menu, MessageCircle, CheckCircle2, LogOut } from 'lucide-react';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useStore } from '../../store/useStore';
-import { SEPOLIA_CHAIN_ID } from '../../src/config/contract';
-import { useChainId } from 'wagmi';
 import { NotificationPopup } from './NotificationPopup';
 import * as api from '../../src/services/api';
 
 export const TopNav: React.FC = () => {
-  const { auth, wallet, setMobileMenuOpen, updateUser } = useStore();
-  const chainId = useChainId();
-  const isSepolia = chainId === SEPOLIA_CHAIN_ID;
+  const { auth, setMobileMenuOpen, updateUser } = useStore();
 
   const [isDisconnecting, setIsDisconnecting] = React.useState(false);
   const [showDisconnectMenu, setShowDisconnectMenu] = React.useState(false);
@@ -118,19 +113,6 @@ export const TopNav: React.FC = () => {
               </button>
             )
           )}
-
-          {wallet.isConnected && (
-            <span className={`px-2 py-1 rounded-lg text-xs font-medium hidden sm:inline-flex ${isSepolia ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}`}>
-              {isSepolia ? 'Sepolia' : `Chain ${chainId}`}
-            </span>
-          )}
-          <div className="hidden sm:block">
-            <ConnectButton
-              accountStatus="address"
-              chainStatus="icon"
-              showBalance={false}
-            />
-          </div>
         </div>
 
         <div className="flex items-center gap-2 md:gap-4">

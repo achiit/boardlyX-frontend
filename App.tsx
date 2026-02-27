@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useAccount, useChainId, useBalance } from 'wagmi';
 import { useStore } from './store/useStore';
 import { Sidebar } from './components/dashboard/Sidebar';
 import { TopNav } from './components/dashboard/TopNav';
@@ -10,7 +9,6 @@ import { TeamsPage } from './components/dashboard/TeamsPage';
 import { ChatPage } from './components/dashboard/ChatPage';
 import { Card } from './components/ui/Card';
 import { Button } from './components/ui/Button';
-import { WalletConnect } from './components/auth/WalletConnect';
 
 type AuthMode = 'login' | 'signup';
 
@@ -292,8 +290,6 @@ const AuthPage: React.FC = () => {
               <span>or continue with</span>
               <div className="h-px flex-1 bg-slate-200" />
             </div>
-
-            <WalletConnect />
           </form>
 
           <div className="flex sm:hidden items-center justify-center mt-6 text-xs text-slate-500">
@@ -320,35 +316,11 @@ const AuthPage: React.FC = () => {
   );
 };
 
-const SEPOLIA_CHAIN_ID = 11155111;
-
-function WalletSync() {
-  const setWallet = useStore((s) => s.setWallet);
-  const { address, isConnected } = useAccount();
-  const chainId = useChainId();
-  const { data: balance } = useBalance({ address: address ?? undefined });
-  React.useEffect(() => {
-    if (!address || !isConnected) {
-      setWallet({ address: null, isConnected: false, balance: '0.00', network: 'Sepolia' });
-      return;
-    }
-    const network = chainId === SEPOLIA_CHAIN_ID ? 'Sepolia' : `Chain ${chainId}`;
-    setWallet({
-      address,
-      isConnected: true,
-      balance: balance?.formatted ?? '0.00',
-      network,
-    });
-  }, [address, isConnected, chainId, balance?.formatted, setWallet]);
-  return null;
-}
-
 const Dashboard: React.FC = () => {
   const { isSidebarOpen, currentPage } = useStore();
 
   return (
     <div className="flex min-h-screen bg-[#0F1117]">
-      <WalletSync />
       <Sidebar />
       <main className={`flex-1 w-full transition-all duration-300 pl-0 ${isSidebarOpen ? 'md:pl-64' : 'md:pl-20'}`}>
         <TopNav />
