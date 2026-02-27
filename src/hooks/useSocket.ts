@@ -99,6 +99,12 @@ export function useSocket() {
         return () => { globalSocket?.off('user_stop_typing', callback); };
     }, []);
 
+    const onPinnedMessageUpdated = useCallback((callback: (data: { conversationId: string; pinnedMessage: Message | null }) => void) => {
+        if (!globalSocket) return () => { };
+        globalSocket.on('pinned_message_updated', callback);
+        return () => { globalSocket?.off('pinned_message_updated', callback); };
+    }, []);
+
     return {
         isConnected,
         sendMessage,
@@ -109,5 +115,6 @@ export function useSocket() {
         emitTypingStop,
         onTyping,
         onStopTyping,
+        onPinnedMessageUpdated,
     };
 }

@@ -25,6 +25,7 @@ export interface Conversation {
     members: ConversationMember[];
     last_message: string | null;
     last_message_at: string | null;
+    pinned_message?: Message | null;
 }
 
 export interface MessageSender {
@@ -96,4 +97,16 @@ export async function sendMediaMessage(
     }
     const data = await res.json();
     return data.message;
+}
+
+export async function pinMessage(conversationId: string, messageId: string | null): Promise<void> {
+    const res = await fetch(`${API_BASE}/api/chat/conversations/${conversationId}/pin`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ messageId }),
+    });
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to pin message');
+    }
 }

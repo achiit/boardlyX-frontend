@@ -10,8 +10,6 @@ import { useStore } from '../../store/useStore';
 import * as teamApi from '../../src/services/teamApi';
 import type { Team, TeamDetail, TeamMember, TeamTask, SearchedUser } from '../../src/services/teamApi';
 import { UserSearch } from './UserSearch';
-import { useSocket } from '../../src/hooks/useSocket';
-import * as chatApi from '../../src/services/chatApi';
 
 const BOARD_COLUMNS = [
   { id: 'backlog', label: 'Backlog', color: 'bg-slate-500', accent: 'border-slate-500/40' },
@@ -861,8 +859,7 @@ const KanbanColumn: React.FC<{
 
 // ─── Teams Page (Main Component) ────────────────────────────────────
 export const TeamsPage: React.FC = () => {
-  const { teams, setTeams, activeTeamId, setActiveTeamId, auth, setMobileMenuOpen } = useStore();
-  const { sendMessage } = useSocket();
+  const { teams, setTeams, activeTeamId, setActiveTeamId, auth } = useStore();
   const [teamDetail, setTeamDetail] = useState<TeamDetail | null>(null);
   const [teamTasks, setTeamTasks] = useState<TeamTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1117,25 +1114,9 @@ export const TeamsPage: React.FC = () => {
       {showCreateTask && teamDetail && (
         <CreateTaskModal
           teamId={teamDetail.id}
-          members={teamDetail.members}
+          members={members}
           onClose={() => setShowCreateTask(false)}
-          onCreated={async (task) => {
-            setTeamTasks(prev => [...prev, task]);
-            setShowCreateTask(false);
-
-            // Forward notification to Team Chat (which flows to Telegram)
-            try {
-              const convs = await chatApi.listConversations();
-              const teamConv = convs.find(c => c.team_id === teamDetail.id);
-              if (teamConv) {
-                const assignees = task.assignees?.map(a => a.user_name || a.user_username || a.user_id).join(', ') || 'Unassigned';
-                const msg = `🎟️ *New Task Created*\n\n**${task.title}**\nPriority: ${task.priority}\nAssigned: ${assignees}`;
-                sendMessage(teamConv.id, msg);
-              }
-            } catch (err) {
-              console.error('Failed to notify chat of new task', err);
-            }
-          }}
+          onCreated={handleTaskCreated}
         />
       )}
       {selectedTask && teamDetail && (

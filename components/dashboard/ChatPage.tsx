@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageCircle, Send, Search, Users, ArrowLeft, Hash, Loader2, Plus, X, Paperclip, Image as ImageIcon, Film, XCircle, Pin, PinOff, Reply } from 'lucide-react';
+import { MessageCircle, Send, Search, Users, ArrowLeft, Hash, Loader2, Plus, X, Paperclip, Image as ImageIcon, Film, XCircle, Pin, PinOff, Reply, MoreHorizontal } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { useSocket } from '../../src/hooks/useSocket';
 import * as chatApi from '../../src/services/chatApi';
@@ -76,7 +76,7 @@ export const ChatPage: React.FC = () => {
     const { auth } = useStore();
     const currentUserId = auth.user?.id || '';
 
-    const { sendMessage, onNewMessage, onNewConversation, joinConversation, isConnected, emitTypingStart, emitTypingStop, onTyping, onStopTyping } = useSocket();
+    const { sendMessage, onNewMessage, onNewConversation, joinConversation, isConnected, emitTypingStart, emitTypingStop, onTyping, onStopTyping, onPinnedMessageUpdated } = useSocket();
 
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -112,6 +112,9 @@ export const ChatPage: React.FC = () => {
 
     // Mentions state
     const [mentionQuery, setMentionQuery] = useState<{ active: boolean; text: string; index: number } | null>(null);
+
+    // Message action dropdown state
+    const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -200,6 +203,20 @@ export const ChatPage: React.FC = () => {
 
         return unsub;
     }, [onNewConversation, joinConversation]);
+
+    // ── Listen for pinned message updates ──
+    useEffect(() => {
+        const unsub = onPinnedMessageUpdated((data) => {
+            setConversations((prev) =>
+                prev.map((c) =>
+                    c.id === data.conversationId
+                        ? { ...c, pinned_message: data.pinnedMessage }
+                        : c
+                )
+            );
+        });
+        return unsub;
+    }, [onPinnedMessageUpdated]);
 
     // ── Typing indicators ──
     useEffect(() => {
@@ -433,6 +450,26 @@ export const ChatPage: React.FC = () => {
     const sortedGroups = [...groupConversations].sort(sortConvs);
     const sortedDms = [...dmConversations].sort(sortConvs);
 
+    // ── Global Pin Handlers ──
+    const handleToggleGlobalPin = async (message: Message) => {
+        if (!activeConvId) return;
+        const isCurrentlyPinned = activeConv?.pinned_message?.id === message.id;
+
+        try {
+            await chatApi.pinMessage(activeConvId, isCurrentlyPinned ? null : message.id);
+            // Optimistic update
+            setConversations((prev) =>
+                prev.map((c) =>
+                    c.id === activeConvId
+                        ? { ...c, pinned_message: isCurrentlyPinned ? null : message }
+                        : c
+                )
+            );
+        } catch (err) {
+            console.error('Failed to pin message', err);
+        }
+    };
+
     // Filter members for mention dropdown
     const mentionableMembers = activeConv?.members?.filter(m => m.id !== currentUserId && (m.username?.toLowerCase().includes(mentionQuery?.text || '') || m.name?.toLowerCase().includes(mentionQuery?.text || ''))) || [];
 
@@ -577,6 +614,34 @@ export const ChatPage: React.FC = () => {
                             )}
                         </div>
 
+                        {/* Global Pinned Message Banner */}
+                        {activeConv.pinned_message && (
+                            <div className="px-5 py-2.5 bg-[#1A1D25] border-b border-white/5 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors" onClick={() => {
+                                // Scroll to message logic could go here
+                            }}>
+                                <div className="flex items-start gap-3 min-w-0">
+                                    <Pin size={16} className="text-emerald-400 mt-0.5 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[10px] font-bold text-emerald-400 mb-0.5">Pinned Message</p>
+                                        <div className="text-xs text-white/70 truncate">
+                                            <span className="font-semibold mr-1">{activeConv.pinned_message.sender?.name || activeConv.pinned_message.sender?.username}:</span>
+                                            {activeConv.pinned_message.media_type ? '📎 Media attached' : activeConv.pinned_message.content}
+                                        </div>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleGlobalPin(activeConv.pinned_message!);
+                                    }}
+                                    className="p-1.5 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-all ml-2 flex-shrink-0"
+                                    title="Unpin message"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        )}
+
                         {/* Messages */}
                         <div className="flex-1 overflow-y-auto custom-scrollbar px-4 md:px-6 py-4">
                             {loadingMsgs ? (
@@ -607,7 +672,7 @@ export const ChatPage: React.FC = () => {
                                             const isConsecutive = idx > 0 && group.messages[idx - 1]?.sender_id === msg.sender_id;
 
                                             return (
-                                                <div key={msg.id} className={`flex gap-2.5 ${isOwn ? 'justify-end' : 'justify-start'} ${isConsecutive && !msg.reply_to_id ? 'mt-0.5' : 'mt-3'}`}>
+                                                <div key={msg.id} className={`group flex gap-2.5 ${isOwn ? 'justify-end' : 'justify-start'} ${isConsecutive && !msg.reply_to_id ? 'mt-0.5' : 'mt-3'}`}>
                                                     {!isOwn && (
                                                         <div className="w-8 flex-shrink-0">
                                                             {showAvatar && (
@@ -617,6 +682,21 @@ export const ChatPage: React.FC = () => {
                                                             )}
                                                         </div>
                                                     )}
+
+                                                    {/* Hover Actions (Desktop) - Left Side */}
+                                                    {isOwn && (
+                                                        <div className="hidden md:flex items-center self-center mr-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button
+                                                                onClick={() => handleToggleGlobalPin(msg)}
+                                                                className={`p-1.5 rounded-lg transition-colors ${activeConv.pinned_message?.id === msg.id ? 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20' : 'text-white/30 hover:text-white hover:bg-white/10'}`}
+                                                                title={activeConv.pinned_message?.id === msg.id ? "Unpin message" : "Pin message"}
+                                                            >
+                                                                <Pin size={14} className={activeConv.pinned_message?.id === msg.id ? "fill-emerald-400" : ""} />
+                                                            </button>
+                                                        </div>
+                                                    )
+                                                    }
+
                                                     <div className={`max-w-[75%] md:max-w-[65%]`} onDoubleClick={() => setReplyingTo(msg)}>
                                                         {showName && !isOwn && (
                                                             <p className="text-[11px] font-medium text-indigo-400/70 mb-1 ml-1">{msg.sender?.name || msg.sender?.username || 'User'}</p>
@@ -656,12 +736,26 @@ export const ChatPage: React.FC = () => {
 
                                                         <p className={`text-[10px] text-white/15 mt-0.5 ${isOwn ? 'text-right mr-1' : 'ml-1'}`}>{formatTime(msg.created_at)}</p>
                                                     </div>
+
+                                                    {/* Hover Actions (Desktop) - Right Side */}
+                                                    {
+                                                        !isOwn && (
+                                                            <div className="hidden md:flex items-center self-center ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <button
+                                                                    onClick={() => handleToggleGlobalPin(msg)}
+                                                                    className={`p-1.5 rounded-lg transition-colors ${activeConv.pinned_message?.id === msg.id ? 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20' : 'text-white/30 hover:text-white hover:bg-white/10'}`}
+                                                                    title={activeConv.pinned_message?.id === msg.id ? "Unpin message" : "Pin message"}
+                                                                >
+                                                                    <Pin size={14} className={activeConv.pinned_message?.id === msg.id ? "fill-emerald-400" : ""} />
+                                                                </button>
+                                                            </div>
+                                                        )
+                                                    }
                                                 </div>
                                             );
                                         })}
                                     </div>
-                                ))
-                            )}
+                                )))}
 
                             {/* Typing Indicator */}
                             {typingUsers.size > 0 && (
@@ -698,29 +792,7 @@ export const ChatPage: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Mention Dropdown */}
-                        {mentionQuery?.active && mentionableMembers.length > 0 && (
-                            <div className="px-4 md:px-6 absolute bottom-20 left-0 right-0 z-50 pointer-events-none">
-                                <div className="bg-[#1A1D25] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-w-sm pointer-events-auto max-h-48 overflow-y-auto custom-scrollbar">
-                                    <div className="px-3 py-2 text-[10px] font-bold text-white/30 uppercase tracking-wider border-b border-white/5 bg-black/20">Mentions</div>
-                                    {mentionableMembers.map(member => (
-                                        <button
-                                            key={member.id}
-                                            onClick={() => handleMentionSelect(member.username)}
-                                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 transition-colors text-left"
-                                        >
-                                            <div className="w-6 h-6 rounded-full overflow-hidden bg-black/30 flex-shrink-0">
-                                                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${member.name || member.username}`} alt="" className="w-full h-full" />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-[13px] font-medium text-white truncate">{member.name}</p>
-                                                <p className="text-[11px] text-indigo-400/70 truncate">@{member.username}</p>
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
+
 
                         {/* Media Preview Bar */}
                         {mediaPreview && (
@@ -759,7 +831,31 @@ export const ChatPage: React.FC = () => {
                         )}
 
                         {/* Message Input */}
-                        <div className="px-4 md:px-6 py-3 border-t border-white/5 bg-[#0F1117]">
+                        <div className="relative px-4 md:px-6 py-3 border-t border-white/5 bg-[#0F1117]">
+                            {/* Mention Dropdown */}
+                            {mentionQuery?.active && mentionableMembers.length > 0 && (
+                                <div className="absolute bottom-full left-0 w-full px-4 md:px-6 mb-2 z-50 pointer-events-none">
+                                    <div className="bg-[#1A1D25] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-w-sm pointer-events-auto max-h-48 overflow-y-auto custom-scrollbar">
+                                        <div className="px-3 py-2 text-[10px] font-bold text-white/30 uppercase tracking-wider border-b border-white/5 bg-black/20">Mentions</div>
+                                        {mentionableMembers.map(member => (
+                                            <button
+                                                key={member.id}
+                                                onClick={() => handleMentionSelect(member.username)}
+                                                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 transition-colors text-left"
+                                            >
+                                                <div className="w-6 h-6 rounded-full overflow-hidden bg-black/30 flex-shrink-0">
+                                                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${member.name || member.username}`} alt="" className="w-full h-full" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-[13px] font-medium text-white truncate">{member.name}</p>
+                                                    <p className="text-[11px] text-indigo-400/70 truncate">@{member.username}</p>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="flex items-end gap-2">
                                 {/* Attachment button */}
                                 <div className="relative">
@@ -831,7 +927,7 @@ export const ChatPage: React.FC = () => {
                     </div>
                 )}
             </div>
-        </div>
+        </div >
     );
 };
 
@@ -885,7 +981,7 @@ const ConversationItem: React.FC<ConversationItemProps> = ({ conv, isActive, isP
             {/* Pin action button */}
             <div
                 onClick={onTogglePin}
-                className={`p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 hover:bg-white/10 ${isPinned ? 'text-indigo-400' : 'text-white/30 hover:text-white'}`}
+                className={`p-1.5 rounded-lg transition-opacity flex-shrink-0 hover:bg-white/10 ${isPinned ? 'opacity-100 text-indigo-400' : 'opacity-0 group-hover:opacity-100 text-white/30 hover:text-white'}`}
                 title={isPinned ? "Unpin" : "Pin"}
             >
                 {isPinned ? <PinOff size={14} /> : <Pin size={14} className="rotate-45" />}
