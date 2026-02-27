@@ -40,6 +40,8 @@ export interface Message {
     content: string;
     media_type: string | null;
     media_data: string | null;
+    reply_to_id?: string | null;
+    reply_to?: Message; // populated locally or from API
     created_at: string;
     sender: MessageSender;
 }
@@ -81,11 +83,12 @@ export async function sendMediaMessage(
     mediaType: string,
     mediaData: string,
     content?: string,
+    replyToId?: string,
 ): Promise<Message> {
     const res = await fetch(`${API_BASE}/api/chat/conversations/${conversationId}/media`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ mediaType, mediaData, content: content || '' }),
+        body: JSON.stringify({ mediaType, mediaData, content: content || '', replyToId }),
     });
     if (!res.ok) {
         const data = await res.json().catch(() => ({}));

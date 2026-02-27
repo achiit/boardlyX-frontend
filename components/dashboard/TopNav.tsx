@@ -1,11 +1,10 @@
 import React from 'react';
-import { Search, Menu } from 'lucide-react';
+import { Search, Menu, MessageCircle, CheckCircle2, LogOut } from 'lucide-react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useStore } from '../../store/useStore';
 import { SEPOLIA_CHAIN_ID } from '../../src/config/contract';
 import { useChainId } from 'wagmi';
 import { NotificationPopup } from './NotificationPopup';
-import { MessageCircle, CheckCircle2 } from 'lucide-react';
 import * as api from '../../src/services/api';
 
 export const TopNav: React.FC = () => {
@@ -13,10 +12,38 @@ export const TopNav: React.FC = () => {
   const chainId = useChainId();
   const isSepolia = chainId === SEPOLIA_CHAIN_ID;
 
+  const [isDisconnecting, setIsDisconnecting] = React.useState(false);
+  const [showDisconnectMenu, setShowDisconnectMenu] = React.useState(false);
+  const menuRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowDisconnectMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const handleConnectTelegram = () => {
     if (!auth.user?.username) return;
-    const botUrl = `https://t.me/updatesBoadlyXbot?start=${auth.user.username}`;
+    const baseUrl = (import.meta as any).env?.VITE_TELEGRAM_BOT_URL || 'https://t.me/updatesBoadlyXbot';
+    const botUrl = `${baseUrl}?start=${auth.user.username}`;
     window.open(botUrl, '_blank');
+  };
+
+  const handleDisconnectTelegram = async () => {
+    try {
+      setIsDisconnecting(true);
+      setShowDisconnectMenu(false);
+      await api.disconnectTelegram();
+      await refreshProfile();
+    } catch (err) {
+      console.error('Failed to disconnect telegram', err);
+    } finally {
+      setIsDisconnecting(false);
+    }
   };
 
   const refreshProfile = React.useCallback(async () => {
@@ -58,9 +85,28 @@ export const TopNav: React.FC = () => {
         <div className="flex items-center gap-2">
           {auth.user?.id && (
             auth.user.telegram_username ? (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 transition-all text-sm font-medium">
-                <CheckCircle2 size={16} className="text-emerald-500" />
-                <span className="hidden sm:inline">Connected to Telegram as @{auth.user.telegram_username}</span>
+              <div className="relative" ref={menuRef}>
+                <button
+                  onClick={() => setShowDisconnectMenu(!showDisconnectMenu)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30 transition-all text-sm font-medium"
+                >
+                  <CheckCircle2 size={16} className="text-emerald-500" />
+                  <span className="hidden sm:inline">Connected to Telegram as @{auth.user.telegram_username}</span>
+                  <span className="sm:hidden">@{auth.user.telegram_username}</span>
+                </button>
+
+                {showDisconnectMenu && (
+                  <div className="absolute top-12 left-0 w-full sm:w-auto sm:min-w-[200px] bg-[#1A1D25] border border-white/5 rounded-xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                    <button
+                      onClick={handleDisconnectTelegram}
+                      disabled={isDisconnecting}
+                      className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span>Disconnect Telegram</span>
+                      <LogOut size={16} />
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <button

@@ -10,6 +10,8 @@ import { useStore } from '../../store/useStore';
 import * as teamApi from '../../src/services/teamApi';
 import type { Team, TeamDetail, TeamMember, TeamTask, SearchedUser } from '../../src/services/teamApi';
 import { UserSearch } from './UserSearch';
+import { useSocket } from '../../src/hooks/useSocket';
+import * as chatApi from '../../src/services/chatApi';
 
 const BOARD_COLUMNS = [
   { id: 'backlog', label: 'Backlog', color: 'bg-slate-500', accent: 'border-slate-500/40' },
@@ -137,7 +139,7 @@ function CreateTeamModal({ onClose, onCreated }: { onClose: () => void; onCreate
       setError('');
       const team = await teamApi.createTeam(name.trim());
       for (const member of membersToInvite) {
-        try { await teamApi.inviteMember(team.id, { userId: member.id }); } catch {}
+        try { await teamApi.inviteMember(team.id, { userId: member.id }); } catch { }
       }
       onCreated(team);
     } catch (err: any) {
@@ -377,11 +379,10 @@ function CreateTaskModal({
               <div className="flex gap-2">
                 {(['low', 'medium', 'high'] as const).map((p) => (
                   <button key={p} type="button" onClick={() => setPriority(p)}
-                    className={`flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-all ${
-                      priority === p
+                    className={`flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-all ${priority === p
                         ? PRIORITY_COLORS[p]
                         : 'bg-white/[0.02] border-white/[0.06] text-white/25 hover:bg-white/[0.04]'
-                    }`}>
+                      }`}>
                     {PRIORITY_LABELS[p]}
                   </button>
                 ))}
@@ -409,11 +410,10 @@ function CreateTaskModal({
                 const selected = assigneeIds.includes(m.user_id);
                 return (
                   <button key={m.user_id} type="button" onClick={() => toggleAssignee(m.user_id)}
-                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all border ${
-                      selected
+                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all border ${selected
                         ? 'bg-indigo-500/10 border-indigo-500/25 text-indigo-300 ring-1 ring-indigo-500/10'
                         : 'bg-white/[0.015] border-white/[0.05] text-white/40 hover:bg-white/[0.03] hover:border-white/[0.08]'
-                    }`}>
+                      }`}>
                     <div className={`w-7 h-7 rounded-full overflow-hidden flex-shrink-0 ${selected ? 'ring-2 ring-indigo-500/20' : ''}`}>
                       <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${m.user_username || m.user_name || m.user_email}`} alt="" className="w-full h-full" />
                     </div>
@@ -528,18 +528,16 @@ function TaskDetailDrawer({
       <div className="flex items-start justify-between px-6 py-5 border-b border-white/[0.05] flex-shrink-0">
         <div className="flex items-center gap-3.5">
           <button onClick={handleMarkComplete} disabled={saving}
-            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border ${
-              task.status === 'completed'
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border ${task.status === 'completed'
                 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
                 : 'bg-white/[0.03] border-white/[0.06] text-white/25 hover:bg-indigo-500/10 hover:border-indigo-500/20 hover:text-indigo-400'
-            }`}
+              }`}
             title={task.status === 'completed' ? 'Mark incomplete' : 'Mark complete'}>
             <CheckCircle2 size={18} />
           </button>
           <div>
-            <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg ${
-              task.status === 'completed' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/15' : 'bg-amber-500/10 text-amber-300 border border-amber-500/15'
-            }`}>
+            <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg ${task.status === 'completed' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/15' : 'bg-amber-500/10 text-amber-300 border border-amber-500/15'
+              }`}>
               {task.status === 'completed' ? 'Completed' : 'Active'}
             </span>
           </div>
@@ -604,9 +602,8 @@ function TaskDetailDrawer({
                 <div className="flex gap-1.5">
                   {(['low', 'medium', 'high'] as const).map((p) => (
                     <button key={p} type="button" onClick={() => setPriority(p)}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${
-                        priority === p ? PRIORITY_COLORS[p] : 'bg-transparent border-white/[0.06] text-white/20 hover:bg-white/[0.03]'
-                      }`}>
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${priority === p ? PRIORITY_COLORS[p] : 'bg-transparent border-white/[0.06] text-white/20 hover:bg-white/[0.03]'
+                        }`}>
                       {PRIORITY_LABELS[p]}
                     </button>
                   ))}
@@ -693,11 +690,10 @@ function TaskDetailDrawer({
                   const selected = assigneeIds.includes(m.user_id);
                   return (
                     <button key={m.user_id} type="button" onClick={() => toggleAssignee(m.user_id)}
-                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all border ${
-                        selected
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all border ${selected
                           ? 'bg-indigo-500/10 border-indigo-500/25 text-indigo-300 ring-1 ring-indigo-500/10'
                           : 'bg-white/[0.015] border-white/[0.05] text-white/40 hover:bg-white/[0.03] hover:border-white/[0.08]'
-                      }`}>
+                        }`}>
                       <div className={`w-6 h-6 rounded-full overflow-hidden flex-shrink-0 ${selected ? 'ring-2 ring-indigo-500/20' : ''}`}>
                         <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${m.user_username || m.user_name || m.user_email}`} alt="" className="w-full h-full" />
                       </div>
@@ -865,7 +861,8 @@ const KanbanColumn: React.FC<{
 
 // ─── Teams Page (Main Component) ────────────────────────────────────
 export const TeamsPage: React.FC = () => {
-  const { teams, setTeams, activeTeamId, setActiveTeamId, auth } = useStore();
+  const { teams, setTeams, activeTeamId, setActiveTeamId, auth, setMobileMenuOpen } = useStore();
+  const { sendMessage } = useSocket();
   const [teamDetail, setTeamDetail] = useState<TeamDetail | null>(null);
   const [teamTasks, setTeamTasks] = useState<TeamTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1114,15 +1111,31 @@ export const TeamsPage: React.FC = () => {
           teamName={teamDetail.name}
           existingMemberIds={members.map((m) => m.user_id)}
           onClose={() => setShowInvite(false)}
-          onInvited={() => {}}
+          onInvited={() => { }}
         />
       )}
       {showCreateTask && teamDetail && (
         <CreateTaskModal
           teamId={teamDetail.id}
-          members={members}
+          members={teamDetail.members}
           onClose={() => setShowCreateTask(false)}
-          onCreated={handleTaskCreated}
+          onCreated={async (task) => {
+            setTeamTasks(prev => [...prev, task]);
+            setShowCreateTask(false);
+
+            // Forward notification to Team Chat (which flows to Telegram)
+            try {
+              const convs = await chatApi.listConversations();
+              const teamConv = convs.find(c => c.team_id === teamDetail.id);
+              if (teamConv) {
+                const assignees = task.assignees?.map(a => a.user_name || a.user_username || a.user_id).join(', ') || 'Unassigned';
+                const msg = `🎟️ *New Task Created*\n\n**${task.title}**\nPriority: ${task.priority}\nAssigned: ${assignees}`;
+                sendMessage(teamConv.id, msg);
+              }
+            } catch (err) {
+              console.error('Failed to notify chat of new task', err);
+            }
+          }}
         />
       )}
       {selectedTask && teamDetail && (

@@ -2,6 +2,13 @@ import type { ApiTask, BoardTask, User } from '../../types';
 
 const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:4000';
 
+function authHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+  };
+}
+
 function getToken(): string | null {
   return localStorage.getItem('token');
 }
@@ -10,7 +17,7 @@ function headers(): HeadersInit {
   const token = getToken();
   return {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(token ? { Authorization: `Bearer ${token} ` } : {}),
   };
 }
 
@@ -40,7 +47,7 @@ export async function listTasks(params: ListTasksParams = {}): Promise<ListTasks
   if (params.order) sp.set('order', params.order);
   if (params.limit != null) sp.set('limit', String(params.limit));
   if (params.offset != null) sp.set('offset', String(params.offset));
-  const res = await fetch(`${API_BASE}/api/tasks?${sp}`, { headers: headers() });
+  const res = await fetch(`${API_BASE} /api/tasks ? ${sp} `, { headers: headers() });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || 'Failed to fetch tasks');
@@ -49,7 +56,7 @@ export async function listTasks(params: ListTasksParams = {}): Promise<ListTasks
 }
 
 export async function getTask(id: string): Promise<ApiTask> {
-  const res = await fetch(`${API_BASE}/api/tasks/${id}`, { headers: headers() });
+  const res = await fetch(`${API_BASE} /api/tasks / ${id} `, { headers: headers() });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || 'Task not found');
@@ -67,7 +74,7 @@ export interface CreateTaskBody {
 }
 
 export async function createTask(body: CreateTaskBody): Promise<ApiTask> {
-  const res = await fetch(`${API_BASE}/api/tasks`, {
+  const res = await fetch(`${API_BASE} /api/tasks`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify(body),
@@ -88,7 +95,7 @@ export interface UpdateTaskBody {
 }
 
 export async function updateTask(id: string, body: UpdateTaskBody): Promise<ApiTask> {
-  const res = await fetch(`${API_BASE}/api/tasks/${id}`, {
+  const res = await fetch(`${API_BASE} /api/tasks / ${id} `, {
     method: 'PUT',
     headers: headers(),
     body: JSON.stringify(body),
@@ -99,7 +106,7 @@ export async function updateTask(id: string, body: UpdateTaskBody): Promise<ApiT
 }
 
 export async function deleteTask(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/tasks/${id}`, {
+  const res = await fetch(`${API_BASE} /api/tasks / ${id} `, {
     method: 'DELETE',
     headers: headers(),
   });
@@ -114,7 +121,7 @@ export async function storeOnChain(
   transactionHash: string,
   chainTimestamp: string | number
 ): Promise<ApiTask> {
-  const res = await fetch(`${API_BASE}/api/tasks/${taskId}/store-onchain`, {
+  const res = await fetch(`${API_BASE} /api/tasks / ${taskId}/store-onchain`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({ transactionHash, chainTimestamp }),
@@ -184,3 +191,15 @@ export async function getProfile(): Promise<User> {
   }
   return res.json();
 }
+
+export async function disconnectTelegram(): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/users/me/telegram`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to disconnect telegram');
+  }
+}
+
