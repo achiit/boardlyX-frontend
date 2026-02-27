@@ -672,7 +672,7 @@ export const ChatPage: React.FC = () => {
                                             const isConsecutive = idx > 0 && group.messages[idx - 1]?.sender_id === msg.sender_id;
 
                                             return (
-                                                <div key={msg.id} className={`group flex gap-2.5 ${isOwn ? 'justify-end' : 'justify-start'} ${isConsecutive && !msg.reply_to_id ? 'mt-0.5' : 'mt-3'}`}>
+                                                <div id={`message-${msg.id}`} key={msg.id} className={`group flex gap-2.5 ${isOwn ? 'justify-end' : 'justify-start'} ${isConsecutive && !msg.reply_to_id ? 'mt-0.5' : 'mt-3'}`}>
                                                     {!isOwn && (
                                                         <div className="w-8 flex-shrink-0">
                                                             {showAvatar && (
@@ -683,9 +683,9 @@ export const ChatPage: React.FC = () => {
                                                         </div>
                                                     )}
 
-                                                    {/* Hover Actions (Desktop) - Left Side */}
+                                                    {/* Hover Actions - Left Side */}
                                                     {isOwn && (
-                                                        <div className="hidden md:flex items-center self-center mr-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <div className="flex md:hidden lg:flex items-center self-center mr-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
                                                             <button
                                                                 onClick={() => handleToggleGlobalPin(msg)}
                                                                 className={`p-1.5 rounded-lg transition-colors ${activeConv.pinned_message?.id === msg.id ? 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20' : 'text-white/30 hover:text-white hover:bg-white/10'}`}
@@ -704,7 +704,13 @@ export const ChatPage: React.FC = () => {
 
                                                         {/* Reply Preview */}
                                                         {msg.reply_to_id && (
-                                                            <div className={`flex items-start gap-2 mb-1 px-3 py-1.5 opacity-70 ${isOwn ? 'bg-white/5 rounded-2xl rounded-br-md text-right flex-row-reverse border-r-2 border-indigo-400' : 'bg-white/5 rounded-2xl rounded-bl-md border-l-2 border-emerald-400'}`}>
+                                                            <div
+                                                                onClick={() => {
+                                                                    const el = document.getElementById(`message-${msg.reply_to_id}`);
+                                                                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                                }}
+                                                                className={`flex items-start gap-2 mb-1 px-3 py-1.5 opacity-70 hover:opacity-100 cursor-pointer transition-opacity ${isOwn ? 'bg-white/5 rounded-2xl rounded-br-md text-right flex-row-reverse border-r-2 border-indigo-400' : 'bg-white/5 rounded-2xl rounded-bl-md border-l-2 border-emerald-400'}`}
+                                                            >
                                                                 <Reply size={12} className="mt-0.5 text-white/50 flex-shrink-0" />
                                                                 <div className={`min-w-0 ${isOwn ? 'text-right' : 'text-left'}`}>
                                                                     <p className="text-[10px] font-semibold text-white/80">{msg.reply_to?.sender?.username || 'Previous message'}</p>
@@ -737,10 +743,10 @@ export const ChatPage: React.FC = () => {
                                                         <p className={`text-[10px] text-white/15 mt-0.5 ${isOwn ? 'text-right mr-1' : 'ml-1'}`}>{formatTime(msg.created_at)}</p>
                                                     </div>
 
-                                                    {/* Hover Actions (Desktop) - Right Side */}
+                                                    {/* Hover Actions - Right Side */}
                                                     {
                                                         !isOwn && (
-                                                            <div className="hidden md:flex items-center self-center ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <div className="flex md:hidden lg:flex items-center self-center ml-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
                                                                 <button
                                                                     onClick={() => handleToggleGlobalPin(msg)}
                                                                     className={`p-1.5 rounded-lg transition-colors ${activeConv.pinned_message?.id === msg.id ? 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20' : 'text-white/30 hover:text-white hover:bg-white/10'}`}
