@@ -3,7 +3,7 @@ import {
   Plus, Search, Edit2, Trash2, CheckCircle2, Loader2, ExternalLink,
   ShieldCheck, LayoutGrid, List, ChevronRight, X, Tag, Calendar,
   MessageSquare, CircleDot, Columns, Clock, Hash, ArrowUpRight,
-  Users,
+  Users, Check,
 } from 'lucide-react';
 import { useStore, getOnChainStatus } from '../../store/useStore';
 import type { BoardTask, OnChainStatus } from '../../types';
@@ -11,6 +11,8 @@ import * as api from '../../src/services/api';
 import { useLogTask } from '../../src/hooks/useLogTask';
 import { useAccount, useChainId, useSwitchChain } from 'wagmi';
 import { SEPOLIA_CHAIN_ID } from '../../src/config/contract';
+import * as teamApi from '../../src/services/teamApi';
+import type { Team, TeamMember } from '../../src/services/teamApi';
 
 const BOARD_COLUMNS = [
   { id: 'backlog', label: 'Backlog', color: 'bg-slate-500', accent: 'border-slate-500/40' },
@@ -246,6 +248,8 @@ function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: {
   const { switchChainAsync } = useSwitchChain();
   const isWrongNetwork = isConnected && chainId !== SEPOLIA_CHAIN_ID;
   const [verifying, setVerifying] = useState(false);
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [members, setMembers] = useState<TeamMember[]>([]);
 
   useEffect(() => {
     setTitle(task.title);
@@ -253,7 +257,18 @@ function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: {
     setPriority(task.priority);
     setBoardColumn(task.boardColumn || 'backlog');
     setStatus(task.status);
+    setAssigneeIds((task.assignees || []).map(a => a.user_id));
   }, [task]);
+
+  useEffect(() => {
+    if (isEditing && task.teamId) {
+      teamApi.getTeam(task.teamId).then(t => setMembers(t.members)).catch(() => { });
+    }
+  }, [isEditing, task.teamId]);
+
+  function toggleAssignee(id: string) {
+    setAssigneeIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
 
   async function handleSave() {
     try {
@@ -261,7 +276,7 @@ function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: {
       if (task.teamId) {
         const { updateTeamTask } = await import('../../src/services/teamApi');
         const updated = await updateTeamTask(task.teamId, task.id, {
-          title: title.trim(), description, priority, status, boardColumn,
+          title: title.trim(), description, priority, status, boardColumn, assigneeIds,
         });
         onUpdate({ ...task, ...updated, teamName: task.teamName, assignees: updated.assignees || task.assignees } as any);
       } else {
@@ -333,17 +348,15 @@ function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: {
       <div className="flex items-start justify-between px-6 py-5 border-b border-white/[0.05] flex-shrink-0">
         <div className="flex items-center gap-3.5">
           <button onClick={handleMarkComplete} disabled={saving}
-            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border ${
-              task.status === 'completed'
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
-                : 'bg-white/[0.03] border-white/[0.06] text-white/25 hover:bg-indigo-500/10 hover:border-indigo-500/20 hover:text-indigo-400'
-            }`}>
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border ${task.status === 'completed'
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+              : 'bg-white/[0.03] border-white/[0.06] text-white/25 hover:bg-indigo-500/10 hover:border-indigo-500/20 hover:text-indigo-400'
+              }`}>
             <CheckCircle2 size={18} />
           </button>
           <div className="flex items-center gap-2">
-            <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg ${
-              task.status === 'completed' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/15' : 'bg-amber-500/10 text-amber-300 border border-amber-500/15'
-            }`}>
+            <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg ${task.status === 'completed' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/15' : 'bg-amber-500/10 text-amber-300 border border-amber-500/15'
+              }`}>
               {task.status === 'completed' ? 'Completed' : 'Active'}
             </span>
             {task.teamName && (
@@ -412,9 +425,8 @@ function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: {
                 <div className="flex gap-1.5">
                   {(['low', 'medium', 'high'] as const).map((p) => (
                     <button key={p} type="button" onClick={() => setPriority(p)}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${
-                        priority === p ? PRIORITY_COLORS[p] : 'bg-transparent border-white/[0.06] text-white/20 hover:bg-white/[0.03]'
-                      }`}>{PRIORITY_LABELS[p]}</button>
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${priority === p ? PRIORITY_COLORS[p] : 'bg-transparent border-white/[0.06] text-white/20 hover:bg-white/[0.03]'
+                        }`}>{PRIORITY_LABELS[p]}</button>
                   ))}
                 </div>
               ) : (
@@ -453,11 +465,10 @@ function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: {
                 <div className="flex gap-1.5">
                   {([['pending', 'Active'], ['completed', 'Done']] as const).map(([v, l]) => (
                     <button key={v} type="button" onClick={() => setStatus(v as any)}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${
-                        status === v
-                          ? v === 'completed' ? 'bg-emerald-500/15 border-emerald-500/25 text-emerald-300' : 'bg-amber-500/15 border-amber-500/25 text-amber-300'
-                          : 'bg-transparent border-white/[0.06] text-white/20 hover:bg-white/[0.03]'
-                      }`}>{l}</button>
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${status === v
+                        ? v === 'completed' ? 'bg-emerald-500/15 border-emerald-500/25 text-emerald-300' : 'bg-amber-500/15 border-amber-500/25 text-amber-300'
+                        : 'bg-transparent border-white/[0.06] text-white/20 hover:bg-white/[0.03]'
+                        }`}>{l}</button>
                   ))}
                 </div>
               </div>
@@ -544,7 +555,31 @@ function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: {
           <div className="border-t border-white/[0.04] mb-6" />
 
           {/* Assignees */}
-          {task.assignees && task.assignees.length > 0 && (
+          {isEditing && task.teamId ? (
+            <div className="mb-6">
+              <SectionLabel icon={Users} label={`Assign members (${assigneeIds.length}/${members.length})`} />
+              <div className="grid grid-cols-2 gap-2">
+                {members.map((m) => {
+                  const selected = assigneeIds.includes(m.user_id);
+                  return (
+                    <button key={m.user_id} type="button" onClick={() => toggleAssignee(m.user_id)}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all border ${selected
+                        ? 'bg-indigo-500/10 border-indigo-500/25 text-indigo-300 ring-1 ring-indigo-500/10'
+                        : 'bg-white/[0.015] border-white/[0.05] text-white/40 hover:bg-white/[0.03] hover:border-white/[0.08]'
+                        }`}>
+                      <div className={`w-7 h-7 rounded-full overflow-hidden flex-shrink-0 ${selected ? 'ring-2 ring-indigo-500/20' : ''}`}>
+                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${m.user_username || m.user_name || m.user_email}`} alt="" className="w-full h-full" />
+                      </div>
+                      <div className="flex-1 min-w-0 text-left">
+                        <p className="truncate">{m.user_username ? `@${m.user_username}` : m.user_name || m.user_email}</p>
+                      </div>
+                      {selected && <Check size={13} className="text-indigo-400 flex-shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : task.assignees && task.assignees.length > 0 ? (
             <div className="mb-6">
               <SectionLabel icon={Users} label={`Assignees (${task.assignees.length})`} />
               <div className="space-y-1.5">
@@ -563,7 +598,7 @@ function TaskDetailDrawer({ task, onClose, onUpdate, onDelete }: {
                 ))}
               </div>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -622,8 +657,31 @@ function CreateTaskPanel({ initialColumn, onClose, onCreated }: {
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [boardColumn, setBoardColumn] = useState(initialColumn);
   const [dueDate, setDueDate] = useState('');
+
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState<string>('');
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    teamApi.listTeams().then(setTeams).catch(() => { });
+  }, []);
+
+  useEffect(() => {
+    if (!selectedTeamId) {
+      setMembers([]);
+      setAssigneeIds([]);
+      return;
+    }
+    teamApi.getTeam(selectedTeamId).then(t => setMembers(t.members)).catch(() => { });
+  }, [selectedTeamId]);
+
+  function toggleAssignee(id: string) {
+    setAssigneeIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  }
 
   const selectedCol = BOARD_COLUMNS.find((c) => c.id === boardColumn);
 
@@ -633,14 +691,29 @@ function CreateTaskPanel({ initialColumn, onClose, onCreated }: {
     try {
       setLoading(true);
       setError('');
-      const created = await api.createTask({
-        title: title.trim(),
-        description: description.trim() || undefined,
-        priority,
-        dueDate: dueDate || null,
-        boardColumn,
-      });
-      onCreated({ ...created, teamName: null, assignees: [] });
+
+      let created: any;
+      if (selectedTeamId) {
+        created = await teamApi.createTeamTask(selectedTeamId, {
+          title: title.trim(),
+          description: description.trim() || undefined,
+          priority,
+          boardColumn,
+          dueDate: dueDate || undefined,
+          assigneeIds,
+        });
+        const teamObj = teams.find(t => t.id === selectedTeamId);
+        onCreated({ ...created, teamName: teamObj?.name || null });
+      } else {
+        created = await api.createTask({
+          title: title.trim(),
+          description: description.trim() || undefined,
+          priority,
+          dueDate: dueDate || null,
+          boardColumn,
+        });
+        onCreated({ ...created, teamName: null, assignees: [] });
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to create task');
     } finally { setLoading(false); }
@@ -669,9 +742,8 @@ function CreateTaskPanel({ initialColumn, onClose, onCreated }: {
               <div className="flex gap-2">
                 {(['low', 'medium', 'high'] as const).map((p) => (
                   <button key={p} type="button" onClick={() => setPriority(p)}
-                    className={`flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-all ${
-                      priority === p ? PRIORITY_COLORS[p] : 'bg-white/[0.02] border-white/[0.06] text-white/25 hover:bg-white/[0.04]'
-                    }`}>{PRIORITY_LABELS[p]}</button>
+                    className={`flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-all ${priority === p ? PRIORITY_COLORS[p] : 'bg-white/[0.02] border-white/[0.06] text-white/25 hover:bg-white/[0.04]'
+                      }`}>{PRIORITY_LABELS[p]}</button>
                 ))}
               </div>
             </div>
@@ -686,10 +758,50 @@ function CreateTaskPanel({ initialColumn, onClose, onCreated }: {
               </div>
             </div>
           </div>
-          <div>
-            <SectionLabel icon={Calendar} label="Due Date" />
-            <input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputClass} />
+          <div className="border-t border-white/[0.04]" />
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <SectionLabel icon={Users} label="Workspace" />
+              <select value={selectedTeamId} onChange={(e) => setSelectedTeamId(e.target.value)} className={selectClass}>
+                <option value="" className="bg-[#1A1D25]">Personal</option>
+                {teams.map((t) => <option key={t.id} value={t.id} className="bg-[#1A1D25]">{t.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <SectionLabel icon={Calendar} label="Due Date" />
+              <input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputClass} />
+            </div>
           </div>
+
+          <div className="border-t border-white/[0.04]" />
+
+          {/* Assignees (only if Team is selected) */}
+          {selectedTeamId && (
+            <div>
+              <SectionLabel icon={Users} label={`Assignees (${assigneeIds.length}/${members.length})`} />
+              <div className="grid grid-cols-2 gap-2">
+                {members.map((m) => {
+                  const selected = assigneeIds.includes(m.user_id);
+                  return (
+                    <button key={m.user_id} type="button" onClick={() => toggleAssignee(m.user_id)}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all border ${selected
+                        ? 'bg-indigo-500/10 border-indigo-500/25 text-indigo-300 ring-1 ring-indigo-500/10'
+                        : 'bg-white/[0.015] border-white/[0.05] text-white/40 hover:bg-white/[0.03] hover:border-white/[0.08]'
+                        }`}>
+                      <div className={`w-7 h-7 rounded-full overflow-hidden flex-shrink-0 ${selected ? 'ring-2 ring-indigo-500/20' : ''}`}>
+                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${m.user_username || m.user_name || m.user_email}`} alt="" className="w-full h-full" />
+                      </div>
+                      <div className="flex-1 min-w-0 text-left">
+                        <p className="truncate">{m.user_username ? `@${m.user_username}` : m.user_name || m.user_email}</p>
+                      </div>
+                      {selected && <Check size={13} className="text-indigo-400 flex-shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </form>
 
@@ -943,9 +1055,8 @@ export const TasksPage: React.FC = () => {
               ['team', `Team (${teamCount})`],
             ] as const).map(([val, lbl]) => (
               <button key={val} onClick={() => setFilterSource(val)}
-                className={`px-3 md:px-3.5 py-1.5 text-[11px] md:text-xs font-medium transition-colors ${
-                  filterSource === val ? 'bg-indigo-500/15 text-indigo-300' : 'text-white/30 hover:text-white/50 hover:bg-white/[0.03]'
-                }`}>{lbl}</button>
+                className={`px-3 md:px-3.5 py-1.5 text-[11px] md:text-xs font-medium transition-colors ${filterSource === val ? 'bg-indigo-500/15 text-indigo-300' : 'text-white/30 hover:text-white/50 hover:bg-white/[0.03]'
+                  }`}>{lbl}</button>
             ))}
           </div>
         </div>
