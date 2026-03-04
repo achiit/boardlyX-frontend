@@ -110,3 +110,31 @@ export async function pinMessage(conversationId: string, messageId: string | nul
         throw new Error(data.error || 'Failed to pin message');
     }
 }
+
+export async function getConversation(conversationId: string): Promise<Conversation> {
+    const res = await fetch(`${API_BASE}/api/chat/conversations/${conversationId}`, {
+        headers: authHeaders(),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as any).error || 'Failed to get conversation');
+    return (data as any).conversation as Conversation;
+}
+
+export async function addMember(conversationId: string, userId: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/api/chat/conversations/${conversationId}/members`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ userId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as any).error || 'Failed to add member');
+}
+
+export async function removeMember(conversationId: string, userId: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/api/chat/conversations/${conversationId}/members/${userId}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as any).error || 'Failed to remove member');
+}

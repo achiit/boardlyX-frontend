@@ -5,6 +5,8 @@ import { useSocket } from '../../src/hooks/useSocket';
 import * as chatApi from '../../src/services/chatApi';
 import type { Conversation, Message } from '../../src/services/chatApi';
 import { UserSearch } from './UserSearch';
+import * as teamApi from '../../src/services/teamApi';
+import type { TeamDetail, TeamMember } from '../../src/services/teamApi';
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 
@@ -76,7 +78,7 @@ export const ChatPage: React.FC = () => {
     const { auth } = useStore();
     const currentUserId = auth.user?.id || '';
 
-    const { sendMessage, onNewMessage, onNewConversation, joinConversation, isConnected, emitTypingStart, emitTypingStop, onTyping, onStopTyping, onPinnedMessageUpdated } = useSocket();
+    const { sendMessage, onNewMessage, onNewConversation, joinConversation, isConnected, emitTypingStart, emitTypingStop, onTyping, onStopTyping, onPinnedMessageUpdated, onMemberAdded, onMemberRemoved } = useSocket();
 
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -90,6 +92,10 @@ export const ChatPage: React.FC = () => {
     const [searchFilter, setSearchFilter] = useState('');
     const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
     const [showMobileChat, setShowMobileChat] = useState(false);
+    const [showMembersPanel, setShowMembersPanel] = useState(false);
+    const [teamDetail, setTeamDetail] = useState<TeamDetail | null>(null);
+    const [memberSearch, setMemberSearch] = useState('');
+    const [actionError, setActionError] = useState<string | null>(null);
 
     // Pinned conversations (local storage)
     const [pinnedConvs, setPinnedConvs] = useState<string[]>(() => {
@@ -217,6 +223,90 @@ export const ChatPage: React.FC = () => {
         });
         return unsub;
     }, [onPinnedMessageUpdated]);
+
+    // ── Listen for member add/remove ──
+    useEffect(() => {
+        const unsubAdded = onMemberAdded(({ conversationId, userId }) => {
+            setConversations((prev) =>
+                prev.map((c) => {
+                    if (c.id !== conversationId) return c;
+                    if (c.members.some((m) => m.id === userId)) return { ...c, member_count: (c.member_count || 0) };
+                    return {
+                        ...c,
+                        member_count: (c.member_count || 0) + 1,
+                        members: [...(c.members || []), { id: userId, name: '', username: '', email: '' }],
+                    };
+                })
+            );
+        });
+        const unsubRemoved = onMemberRemoved(({ conversationId, userId }) => {
+            setConversations((prev) =>
+                prev.map((c) => {
+                    if (c.id !== conversationId) return c;
+                    const nextMembers = (c.members || []).filter((m) => m.id !== userId);
+                    return { ...c, member_count: Math.max(0, (c.member_count || 0) - (c.members.some(m => m.id === userId) ? 1 : 0)), members: nextMembers };
+                })
+            );
+            if (conversationId === activeConvId && userId === currentUserId) {
+                setActiveConvId(null);
+                setShowMembersPanel(false);
+            }
+        });
+        return () => { unsubAdded(); unsubRemoved(); };
+    }, [onMemberAdded, onMemberRemoved, activeConvId, currentUserId]);
+
+    // ── Fetch team detail for group conversation ──
+    useEffect(() => {
+        async function fetchTeam() {
+            setActionError(null);
+            if (activeConv?.type !== 'group' || !activeConv?.team_id) { setTeamDetail(null); return; }
+            try {
+                const detail = await teamApi.getTeam(activeConv.team_id);
+                setTeamDetail(detail);
+            } catch (err: any) {
+                setTeamDetail(null);
+            }
+        }
+        fetchTeam();
+    }, [activeConv?.team_id, activeConv?.type]);
+
+    const currentUserTeamRole: TeamMember['role'] | null = teamDetail?.members.find(m => m.user_id === currentUserId)?.role || null;
+    const canManageMembers = currentUserTeamRole === 'owner' || currentUserTeamRole === 'admin';
+    const teamUsers = (teamDetail?.members || []).map(m => ({
+        id: m.user_id,
+        name: m.user_name || '',
+        username: m.user_username || '',
+        email: m.user_email || '',
+        role: m.role,
+    }));
+    const convMemberIds = new Set(activeConv?.members.map(m => m.id) || []);
+    const eligibleUsers = teamUsers.filter(u => !convMemberIds.has(u.id) && ((u.name || u.username || u.email).toLowerCase().includes(memberSearch.toLowerCase())));
+
+    const handleAddMember = async (userId: string) => {
+        if (!activeConvId) return;
+        setActionError(null);
+        try {
+            await chatApi.addMember(activeConvId, userId);
+            setConversations(prev => prev.map(c => c.id === activeConvId ? { ...c, member_count: (c.member_count || 0) + (c.members.some(m => m.id === userId) ? 0 : 1), members: c.members.some(m => m.id === userId) ? c.members : [...c.members, teamUsers.find(u => u.id === userId) || { id: userId, name: '', username: '', email: '' }] } : c));
+        } catch (err: any) {
+            setActionError(err.message || 'Failed to add member');
+        }
+    };
+
+    const handleRemoveMember = async (userId: string) => {
+        if (!activeConvId) return;
+        setActionError(null);
+        try {
+            await chatApi.removeMember(activeConvId, userId);
+            setConversations(prev => prev.map(c => c.id === activeConvId ? { ...c, member_count: Math.max(0, (c.member_count || 0) - (c.members.some(m => m.id === userId) ? 1 : 0)), members: c.members.filter(m => m.id !== userId) } : c));
+            if (userId === currentUserId) {
+                setActiveConvId(null);
+                setShowMembersPanel(false);
+            }
+        } catch (err: any) {
+            setActionError(err.message || 'Failed to remove member');
+        }
+    };
 
     // ── Typing indicators ──
     useEffect(() => {
@@ -419,6 +509,7 @@ export const ChatPage: React.FC = () => {
         setShowMobileChat(true);
         setTypingUsers(new Set());
         setReplyingTo(null);
+        joinConversation(convId);
     };
 
     const togglePin = (convId: string, e: React.MouseEvent) => {
@@ -612,7 +703,93 @@ export const ChatPage: React.FC = () => {
                                     )}
                                 </div>
                             )}
+                            {activeConv.type === 'group' && (
+                                <button
+                                    onClick={() => setShowMembersPanel((v) => !v)}
+                                    className="p-2 rounded-xl bg-white/5 text-white/60 hover:text-white hover:bg-white/10 transition-all"
+                                    title="Manage members"
+                                >
+                                    <MoreHorizontal size={16} />
+                                </button>
+                            )}
                         </div>
+
+                        {showMembersPanel && activeConv.type === 'group' && (
+                            <div className="px-5 py-3 border-t border-white/5 bg-[#0F1117]">
+                                <div className="flex items-center justify-between mb-2">
+                                    <p className="text-[11px] font-bold text-white/40 uppercase tracking-[0.12em]">Members</p>
+                                    {canManageMembers ? (
+                                        <span className="text-[10px] text-emerald-400/80">Owner/Admin controls</span>
+                                    ) : (
+                                        <span className="text-[10px] text-white/30">Read-only</span>
+                                    )}
+                                </div>
+                                {actionError && <p className="text-[11px] text-red-400 bg-red-500/10 rounded-lg px-3 py-1.5 mb-2">{actionError}</p>}
+                                <div className="flex flex-col md:flex-row md:items-start gap-4">
+                                    <div className="flex-1 min-w-0">
+                                        {(activeConv.members || []).map((m) => {
+                                            const role = teamDetail?.members.find(tm => tm.user_id === m.id)?.role || 'member';
+                                            const isOwner = role === 'owner';
+                                            return (
+                                                <div key={m.id} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-[#1A1D25] border border-white/5 mb-2">
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <div className="w-7 h-7 rounded-full overflow-hidden bg-black/30 flex-shrink-0">
+                                                            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${m.name || m.username}`} alt="" className="w-full h-full" />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p className="text-xs font-medium text-white truncate">{m.name || m.username || m.email || 'User'}</p>
+                                                            <p className="text-[10px] text-white/30">{role}</p>
+                                                        </div>
+                                                    </div>
+                                                    {canManageMembers && !isOwner && (
+                                                        <button
+                                                            onClick={() => handleRemoveMember(m.id)}
+                                                            className="px-2.5 py-1 rounded-lg bg-red-500/20 border border-red-500/30 text-red-300 text-[11px] hover:bg-red-500/30 transition-colors"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    {canManageMembers && (
+                                        <div className="w-full md:w-80">
+                                            <div className="mb-2">
+                                                <input
+                                                    value={memberSearch}
+                                                    onChange={(e) => setMemberSearch(e.target.value)}
+                                                    placeholder="Search team members..."
+                                                    className="w-full bg-[#1A1D25] border border-white/5 rounded-xl px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                                />
+                                            </div>
+                                            <div className="max-h-44 overflow-y-auto custom-scrollbar border border-white/5 rounded-xl">
+                                                {eligibleUsers.length === 0 ? (
+                                                    <div className="px-3 py-3 text-[11px] text-white/30">No eligible users</div>
+                                                ) : (
+                                                    eligibleUsers.map(u => (
+                                                        <div key={u.id} className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/5 last:border-0">
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                <div className="w-6 h-6 rounded-full overflow-hidden bg-black/30 flex-shrink-0">
+                                                                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${u.name || u.username}`} alt="" className="w-full h-full" />
+                                                                </div>
+                                                                <p className="text-xs text-white truncate">{u.name || u.username || u.email}</p>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleAddMember(u.id)}
+                                                                className="px-2 py-1 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-[11px] hover:bg-indigo-500/30 transition-colors"
+                                                            >
+                                                                Add
+                                                            </button>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Global Pinned Message Banner */}
                         {activeConv.pinned_message && (

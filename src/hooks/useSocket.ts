@@ -104,6 +104,18 @@ export function useSocket() {
         globalSocket.on('pinned_message_updated', callback);
         return () => { globalSocket?.off('pinned_message_updated', callback); };
     }, []);
+    
+    const onMemberAdded = useCallback((callback: (data: { conversationId: string; userId: string }) => void) => {
+        if (!globalSocket) return () => { };
+        globalSocket.on('member_added', callback);
+        return () => { globalSocket?.off('member_added', callback); };
+    }, []);
+    
+    const onMemberRemoved = useCallback((callback: (data: { conversationId: string; userId: string }) => void) => {
+        if (!globalSocket) return () => { };
+        globalSocket.on('member_removed', callback);
+        return () => { globalSocket?.off('member_removed', callback); };
+    }, []);
 
     return {
         isConnected,
@@ -116,5 +128,7 @@ export function useSocket() {
         onTyping,
         onStopTyping,
         onPinnedMessageUpdated,
+        onMemberAdded,
+        onMemberRemoved,
     };
 }
