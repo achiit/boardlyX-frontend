@@ -7,15 +7,20 @@ import { useStore } from '../../store/useStore';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import * as resourceService from '../../src/services/resourceService';
+import * as teamApi from '../../src/services/teamApi';
 import { Category, Resource } from '../../types';
+import { TeamDetail } from '../../src/services/teamApi';
 
 export const ResourcesPage: React.FC = () => {
     const { auth, activeTeamId } = useStore();
     const [categories, setCategories] = useState<Category[]>([]);
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
     const [resources, setResources] = useState<Resource[]>([]);
+    const [teamDetail, setTeamDetail] = useState<TeamDetail | null>(null);
 
     const [loading, setLoading] = useState(true);
+    const [teamLoading, setTeamLoading] = useState(true);
+    const [categoriesLoading, setCategoriesLoading] = useState(true);
     const [resourcesLoading, setResourcesLoading] = useState(false);
     const [error, setError] = useState<{ message: string; type?: 'auth' | 'general' } | null>(null);
 
@@ -29,15 +34,28 @@ export const ResourcesPage: React.FC = () => {
         description: '',
     });
 
+    const fetchTeamDetails = useCallback(async () => {
+        if (!activeTeamId) return;
+        setTeamLoading(true);
+        try {
+            const teamData = await teamApi.getTeam(activeTeamId);
+            setTeamDetail(teamData);
+        } catch (e) {
+            console.error('Failed to load team details', e);
+        } finally {
+            setTeamLoading(false);
+        }
+    }, [activeTeamId]);
+
     const fetchCategories = useCallback(async () => {
         if (!activeTeamId) return;
-        setLoading(true);
+        setCategoriesLoading(true);
         setError(null);
         try {
-            const data = await resourceService.listCategories(activeTeamId);
-            setCategories(data);
-            if (data.length > 0 && !selectedCategoryId) {
-                setSelectedCategoryId(data[0].id);
+            const catData = await resourceService.listCategories(activeTeamId);
+            setCategories(catData);
+            if (catData.length > 0 && !selectedCategoryId) {
+                setSelectedCategoryId(catData[0].id);
             }
         } catch (e) {
             const msg = e instanceof Error ? e.message : 'Failed to load categories';
@@ -46,7 +64,8 @@ export const ResourcesPage: React.FC = () => {
                 type: msg.toLowerCase().includes('forbidden') || msg.toLowerCase().includes('membership') ? 'auth' : 'general'
             });
         } finally {
-            setLoading(false);
+            setCategoriesLoading(false);
+            setLoading(false); // Top level loading done when categories are in
         }
     }, [activeTeamId, selectedCategoryId]);
 
@@ -63,8 +82,11 @@ export const ResourcesPage: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        fetchCategories();
-    }, [fetchCategories]);
+        if (activeTeamId) {
+            fetchTeamDetails();
+            fetchCategories();
+        }
+    }, [activeTeamId, fetchTeamDetails, fetchCategories]);
 
     useEffect(() => {
         if (selectedCategoryId) {
@@ -139,10 +161,26 @@ export const ResourcesPage: React.FC = () => {
 
     if (loading && categories.length === 0) {
         return (
-            <div className="p-8 flex items-center justify-center min-h-[400px]">
-                <div className="flex flex-col items-center gap-3">
-                    <Loader2 size={28} className="animate-spin text-indigo-400" />
-                    <span className="text-sm text-white/30">Loading resources...</span>
+            <div className="p-8 space-y-8 max-w-7xl mx-auto">
+                {/* Skeleton Header */}
+                <div className="flex justify-between items-center">
+                    <div className="space-y-2">
+                        <div className="w-48 h-8 bg-white/5 rounded-lg animate-pulse" />
+                        <div className="w-64 h-4 bg-white/5 rounded-lg animate-pulse" />
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div className="lg:col-span-3 space-y-4">
+                        <div className="w-24 h-4 bg-white/5 rounded mb-4" />
+                        {[1, 2, 3].map(i => (
+                            <div key={i} className="w-full h-10 bg-white/5 rounded-xl animate-pulse" />
+                        ))}
+                    </div>
+                    <div className="lg:col-span-9 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {[1, 2, 4, 5].map(i => (
+                            <Card key={i} className="h-32 border-white/5 bg-white/[0.02] animate-pulse" />
+                        ))}
+                    </div>
                 </div>
             </div>
         );
@@ -188,7 +226,13 @@ export const ResourcesPage: React.FC = () => {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-xl md:text-2xl font-bold text-white uppercase tracking-tight">Resources</h1>
+                    {teamLoading ? (
+                        <div className="w-48 h-7 bg-white/5 rounded-lg animate-pulse mb-1" />
+                    ) : (
+                        <h1 className="text-xl md:text-2xl font-bold text-white uppercase tracking-tight">
+                            {teamDetail ? `${teamDetail.name} Resources` : 'Resources'}
+                        </h1>
+                    )}
                     <p className="text-sm text-white/35 mt-1">Organize and share team links and documentation.</p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -242,6 +286,34 @@ export const ResourcesPage: React.FC = () => {
                                 </button>
                             ))
                         )}
+                    </div>
+
+                    {/* Team Members */}
+                    <div className="pt-4 space-y-4">
+                        <h3 className="text-xs font-semibold text-white/30 uppercase tracking-widest pl-1">Team Members</h3>
+                        <div className="space-y-2">
+                            {teamLoading ? (
+                                [1, 2, 3].map(i => (
+                                    <div key={i} className="h-10 w-full bg-white/[0.02] rounded-xl animate-pulse border border-white/5" />
+                                ))
+                            ) : teamDetail?.members.map(member => (
+                                <div key={member.user_id} className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/[0.02] border border-white/5 group hover:bg-white/[0.04] transition-colors">
+                                    <div className="w-6 h-6 rounded-full overflow-hidden bg-indigo-500/20 flex items-center justify-center text-[10px] text-indigo-400">
+                                        <img
+                                            src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${member.user_username || member.user_name || member.user_email}`}
+                                            alt=""
+                                            className="w-full h-full"
+                                        />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[11px] font-medium text-white/60 truncate group-hover:text-white transition-colors">
+                                            {member.user_name || member.user_username || 'Member'}
+                                        </p>
+                                    </div>
+                                    <div className={`w-1.5 h-1.5 rounded-full ${member.role === 'owner' ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]' : 'bg-indigo-400/40'}`} title={member.role} />
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
 

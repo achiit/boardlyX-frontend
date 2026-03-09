@@ -88,7 +88,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
   tasks: mockTasks,
   isSidebarOpen: true,
-  currentPage: 'overview',
+  currentPage: (localStorage.getItem('currentPage') as PageId) || 'overview',
   apiTasks: [],
   taskFilters: {},
   taskPagination: { limit: 20, offset: 0, total: 0 },
@@ -115,7 +115,10 @@ export const useStore = create<AppState>((set, get) => ({
   updateTaskStatus: (id, status) => set((state) => ({
     tasks: state.tasks.map((t) => (t.id === id ? { ...t, status } : t)),
   })),
-  setCurrentPage: (currentPage) => set({ currentPage }),
+  setCurrentPage: (currentPage) => {
+    localStorage.setItem('currentPage', currentPage);
+    set({ currentPage });
+  },
   setApiTasks: (apiTasks, total) =>
     set((state) => ({
       apiTasks,
