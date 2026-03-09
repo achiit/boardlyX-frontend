@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     Plus, Folder, Link as LinkIcon, Trash2, ExternalLink,
-    Loader2, AlertTriangle, ChevronRight, FolderPlus, Globe
+    Loader2, AlertTriangle, ChevronRight, FolderPlus, Globe, Shield
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { Card } from '../ui/Card';
@@ -17,7 +17,7 @@ export const ResourcesPage: React.FC = () => {
 
     const [loading, setLoading] = useState(true);
     const [resourcesLoading, setResourcesLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<{ message: string; type?: 'auth' | 'general' } | null>(null);
 
     const [showCategoryForm, setShowCategoryForm] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
@@ -40,7 +40,11 @@ export const ResourcesPage: React.FC = () => {
                 setSelectedCategoryId(data[0].id);
             }
         } catch (e) {
-            setError(e instanceof Error ? e.message : 'Failed to load categories');
+            const msg = e instanceof Error ? e.message : 'Failed to load categories';
+            setError({
+                message: msg,
+                type: msg.toLowerCase().includes('forbidden') || msg.toLowerCase().includes('membership') ? 'auth' : 'general'
+            });
         } finally {
             setLoading(false);
         }
@@ -144,10 +148,29 @@ export const ResourcesPage: React.FC = () => {
         );
     }
 
+    if (error?.type === 'auth') {
+        return (
+            <div className="p-8">
+                <Card className="py-16 text-center border-red-500/20 bg-red-500/[0.02]">
+                    <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+                        <Shield size={28} className="text-red-400/60" />
+                    </div>
+                    <h4 className="text-white font-semibold mb-1">Access Denied</h4>
+                    <p className="text-sm text-white/35 mb-5 max-w-[320px] mx-auto">
+                        You don't have permission to view this team's resources. Please ensure you are a member of the selected team.
+                    </p>
+                    <Button variant="outline" size="sm" onClick={() => fetchCategories()} className="border-white/10">
+                        Try Again
+                    </Button>
+                </Card>
+            </div>
+        );
+    }
+
     if (!activeTeamId) {
         return (
             <div className="p-8">
-                <Card className="py-16 text-center">
+                <Card className="py-16 text-center border-white/5 bg-white/[0.01]">
                     <div className="w-16 h-16 rounded-2xl bg-amber-500/10 flex items-center justify-center mx-auto mb-4">
                         <AlertTriangle size={28} className="text-amber-400/40" />
                     </div>
@@ -203,8 +226,8 @@ export const ResourcesPage: React.FC = () => {
                                     key={cat.id}
                                     onClick={() => setSelectedCategoryId(cat.id)}
                                     className={`w-full flex items-center justify-between group px-3 py-2.5 rounded-xl transition-all duration-200 ${selectedCategoryId === cat.id
-                                            ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                                            : 'text-white/40 hover:bg-white/[0.03] hover:text-white/60 border border-transparent'
+                                        ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                                        : 'text-white/40 hover:bg-white/[0.03] hover:text-white/60 border border-transparent'
                                         }`}
                                 >
                                     <div className="flex items-center gap-3 min-w-0">
@@ -252,7 +275,7 @@ export const ResourcesPage: React.FC = () => {
                                     </Button>
                                 </Card>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div key={selectedCategoryId} className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
                                     {resources.map(res => (
                                         <Card key={res.id} className="group relative border-white/5 hover:border-indigo-500/20 hover:bg-white/[0.03] transition-all duration-300">
                                             <div className="flex items-start justify-between gap-4">
@@ -393,6 +416,16 @@ export const ResourcesPage: React.FC = () => {
                     </div>
                 </div>
             )}
+            {/* Animations */}
+            <style>{`
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .animate-fade-in {
+                    animation: fadeIn 0.3s ease-out forwards;
+                }
+            `}</style>
         </div>
     );
 };
