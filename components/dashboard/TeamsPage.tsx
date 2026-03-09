@@ -4,7 +4,7 @@ import {
   Clock, AlertCircle, Crown, Shield, User as UserIcon,
   Check, Loader2, Trash2, Edit3, CheckCircle2,
   Calendar, Tag, Columns, MessageSquare, Hash, ChevronRight,
-  CircleDot, ArrowUpRight,
+  CircleDot, ArrowUpRight, BookOpen
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import * as teamApi from '../../src/services/teamApi';
@@ -35,10 +35,10 @@ function timeAgo(dateStr: string): string {
   const diff = Math.max(0, Date.now() - new Date(dateStr).getTime());
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m`;
+  if (mins < 60) return `${mins} m`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  return `${Math.floor(hrs / 24)}d`;
+  if (hrs < 24) return `${hrs} h`;
+  return `${Math.floor(hrs / 24)} d`;
 }
 
 function RoleBadge({ role }: { role: string }) {
@@ -55,14 +55,16 @@ function AvatarStack({ members, max = 4 }: { members: { user_name: string | null
       {shown.map((m, i) => (
         <div key={i} className="w-7 h-7 rounded-full border-2 border-[#1A1D25] overflow-hidden bg-indigo-500/20 flex items-center justify-center" title={m.user_name || m.user_email || ''}>
           <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${m.user_name || m.user_email || i}`} alt="" className="w-full h-full" />
-        </div>
+        </div >
       ))}
-      {extra > 0 && (
-        <div className="w-7 h-7 rounded-full border-2 border-[#1A1D25] bg-white/10 flex items-center justify-center text-[10px] text-white/60 font-medium">
-          +{extra}
-        </div>
-      )}
-    </div>
+      {
+        extra > 0 && (
+          <div className="w-7 h-7 rounded-full border-2 border-[#1A1D25] bg-white/10 flex items-center justify-center text-[10px] text-white/60 font-medium">
+            +{extra}
+          </div>
+        )
+      }
+    </div >
   );
 }
 
@@ -378,8 +380,8 @@ function CreateTaskModal({
                 {(['low', 'medium', 'high'] as const).map((p) => (
                   <button key={p} type="button" onClick={() => setPriority(p)}
                     className={`flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-all ${priority === p
-                        ? PRIORITY_COLORS[p]
-                        : 'bg-white/[0.02] border-white/[0.06] text-white/25 hover:bg-white/[0.04]'
+                      ? PRIORITY_COLORS[p]
+                      : 'bg-white/[0.02] border-white/[0.06] text-white/25 hover:bg-white/[0.04]'
                       }`}>
                     {PRIORITY_LABELS[p]}
                   </button>
@@ -409,8 +411,8 @@ function CreateTaskModal({
                 return (
                   <button key={m.user_id} type="button" onClick={() => toggleAssignee(m.user_id)}
                     className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all border ${selected
-                        ? 'bg-indigo-500/10 border-indigo-500/25 text-indigo-300 ring-1 ring-indigo-500/10'
-                        : 'bg-white/[0.015] border-white/[0.05] text-white/40 hover:bg-white/[0.03] hover:border-white/[0.08]'
+                      ? 'bg-indigo-500/10 border-indigo-500/25 text-indigo-300 ring-1 ring-indigo-500/10'
+                      : 'bg-white/[0.015] border-white/[0.05] text-white/40 hover:bg-white/[0.03] hover:border-white/[0.08]'
                       }`}>
                     <div className={`w-7 h-7 rounded-full overflow-hidden flex-shrink-0 ${selected ? 'ring-2 ring-indigo-500/20' : ''}`}>
                       <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${m.user_username || m.user_name || m.user_email}`} alt="" className="w-full h-full" />
@@ -527,8 +529,8 @@ function TaskDetailDrawer({
         <div className="flex items-center gap-3.5">
           <button onClick={handleMarkComplete} disabled={saving}
             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border ${task.status === 'completed'
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
-                : 'bg-white/[0.03] border-white/[0.06] text-white/25 hover:bg-indigo-500/10 hover:border-indigo-500/20 hover:text-indigo-400'
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+              : 'bg-white/[0.03] border-white/[0.06] text-white/25 hover:bg-indigo-500/10 hover:border-indigo-500/20 hover:text-indigo-400'
               }`}
             title={task.status === 'completed' ? 'Mark incomplete' : 'Mark complete'}>
             <CheckCircle2 size={18} />
@@ -689,8 +691,8 @@ function TaskDetailDrawer({
                   return (
                     <button key={m.user_id} type="button" onClick={() => toggleAssignee(m.user_id)}
                       className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all border ${selected
-                          ? 'bg-indigo-500/10 border-indigo-500/25 text-indigo-300 ring-1 ring-indigo-500/10'
-                          : 'bg-white/[0.015] border-white/[0.05] text-white/40 hover:bg-white/[0.03] hover:border-white/[0.08]'
+                        ? 'bg-indigo-500/10 border-indigo-500/25 text-indigo-300 ring-1 ring-indigo-500/10'
+                        : 'bg-white/[0.015] border-white/[0.05] text-white/40 hover:bg-white/[0.03] hover:border-white/[0.08]'
                         }`}>
                       <div className={`w-6 h-6 rounded-full overflow-hidden flex-shrink-0 ${selected ? 'ring-2 ring-indigo-500/20' : ''}`}>
                         <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${m.user_username || m.user_name || m.user_email}`} alt="" className="w-full h-full" />
@@ -859,7 +861,7 @@ const KanbanColumn: React.FC<{
 
 // ─── Teams Page (Main Component) ────────────────────────────────────
 export const TeamsPage: React.FC = () => {
-  const { teams, setTeams, activeTeamId, setActiveTeamId, auth } = useStore();
+  const { teams, setTeams, activeTeamId, setActiveTeamId, setCurrentPage, auth } = useStore();
   const [teamDetail, setTeamDetail] = useState<TeamDetail | null>(null);
   const [teamTasks, setTeamTasks] = useState<TeamTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1053,6 +1055,15 @@ export const TeamsPage: React.FC = () => {
               <UserPlus size={16} /> <span className="hidden sm:inline">Invite</span>
             </button>
           )}
+          <button
+            onClick={() => {
+              setActiveTeamId(activeTeamId);
+              setCurrentPage('resources');
+            }}
+            className="flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300 text-sm font-medium transition-all"
+          >
+            <BookOpen size={16} /> <span className="hidden sm:inline">Add Resources</span>
+          </button>
           <button
             onClick={() => { setNewTaskColumn('backlog'); setShowCreateTask(true); }}
             className="flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium px-4 md:px-5 py-2 rounded-xl hover:shadow-lg hover:shadow-indigo-500/25 transition-all active:scale-[0.98] text-sm"
