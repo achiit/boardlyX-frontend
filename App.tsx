@@ -7,6 +7,7 @@ import { AnalyticsPage } from './components/dashboard/AnalyticsPage';
 import { OverviewPage } from './components/dashboard/OverviewPage';
 import { TeamsPage } from './components/dashboard/TeamsPage';
 import { ChatPage } from './components/dashboard/ChatPage';
+import { ResourcesPage } from './components/dashboard/ResourcesPage';
 import { Card } from './components/ui/Card';
 import { Button } from './components/ui/Button';
 
@@ -328,6 +329,7 @@ const Dashboard: React.FC = () => {
         {currentPage === 'tasks' && <TasksPage />}
         {currentPage === 'teams' && <TeamsPage />}
         {currentPage === 'chat' && <ChatPage />}
+        {currentPage === 'resources' && <ResourcesPage />}
         {currentPage === 'analytics' && <AnalyticsPage />}
       </main>
     </div>

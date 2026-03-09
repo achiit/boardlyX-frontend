@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { AuthState, User, WalletState, Task, ApiTask, OnChainStatus, TeamSummary, AppNotification } from '../types';
 
-export type PageId = 'overview' | 'tasks' | 'analytics' | 'settings' | 'teams' | 'chat';
+export type PageId = 'overview' | 'tasks' | 'analytics' | 'settings' | 'teams' | 'chat' | 'resources';
 
 export interface TaskFilters {
   status?: string;
@@ -68,7 +68,15 @@ const mockTasks: Task[] = [
 
 export const useStore = create<AppState>((set, get) => ({
   auth: {
-    user: JSON.parse(localStorage.getItem('user') || 'null'),
+    user: (() => {
+      const stored = localStorage.getItem('user');
+      if (!stored || stored === 'undefined') return null;
+      try {
+        return JSON.parse(stored);
+      } catch {
+        return null;
+      }
+    })(),
     token: localStorage.getItem('token'),
     isAuthenticated: !!localStorage.getItem('token'),
   },

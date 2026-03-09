@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, ListTodo, PieChart, LogOut, ChevronLeft, ChevronRight, Users, X, MessageCircle } from 'lucide-react';
+import { LayoutDashboard, ListTodo, PieChart, LogOut, ChevronLeft, ChevronRight, Users, X, MessageCircle, Folder } from 'lucide-react';
 import { useStore, type PageId } from '../../store/useStore';
 
 const menuItems: { id: PageId; icon: React.ElementType; label: string }[] = [
@@ -7,6 +7,7 @@ const menuItems: { id: PageId; icon: React.ElementType; label: string }[] = [
   { id: 'tasks', icon: ListTodo, label: 'Tasks' },
   { id: 'teams', icon: Users, label: 'Teams' },
   { id: 'chat', icon: MessageCircle, label: 'Chat' },
+  { id: 'resources', icon: Folder, label: 'Resources' },
   { id: 'analytics', icon: PieChart, label: 'Analytics' },
 ];
 

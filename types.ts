@@ -86,3 +86,20 @@ export interface AppNotification {
   read: boolean;
   created_at: string;
 }
+
+export interface Category {
+  id: string;
+  name: string;
+  teamId: string;
+  created_at: string;
+}
+
+export interface Resource {
+  id: string;
+  categoryId: string;
+  title: string;
+  url: string;
+  description?: string;
+  user_name: string;
+  created_at: string;
+}
